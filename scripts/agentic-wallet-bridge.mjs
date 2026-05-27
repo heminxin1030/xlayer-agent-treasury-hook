@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ const port = Number(process.env.AGENTIC_BRIDGE_PORT || 8789);
 const writeEnabled = process.env.AGENTIC_BRIDGE_WRITE === "1";
 const allowDefaultHome = process.env.AGENTIC_GATEWAY_ALLOW_DEFAULT_HOME === "1";
 const dataDir = process.env.AGENTIC_GATEWAY_DATA_DIR || path.join(os.homedir(), ".agent-treasury-gateway");
+const manifestUrl = new URL("../deployment/xlayer-mainnet.review.json", import.meta.url);
 const allowedOrigins = new Set(
   (process.env.AGENTIC_BRIDGE_ALLOWED_ORIGINS ||
     "http://127.0.0.1:5173,http://localhost:5173,https://heminxin1030.github.io")
@@ -128,6 +129,75 @@ function parseTxHash(stdout) {
   const hash = parsed?.txHash ?? parsed?.data?.txHash ?? parsed?.transactionHash ?? parsed?.hash;
   if (typeof hash === "string" && /^0x[a-fA-F0-9]{64}$/.test(hash)) return hash;
   return stdout.match(/0x[a-fA-F0-9]{64}/)?.[0] ?? null;
+}
+
+function short(value) {
+  return typeof value === "string" && value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value || "-";
+}
+
+function strategyFromIntent(intent, fallback = "Balanced") {
+  const text = String(intent || "").toLowerCase();
+  if (/保守|低风险|low|conservative|wide|暂停|pause/.test(text)) return "Conservative";
+  if (/激进|高收益|aggressive|high fee|收益|capture/.test(text)) return "Aggressive";
+  return fallback;
+}
+
+function extractCapitalBps(intent, fallback) {
+  const percent = String(intent || "").match(/(\d{1,2})(?:\s*)%/);
+  if (!percent) return fallback;
+  const parsed = Number(percent[1]) * 100;
+  return Number.isFinite(parsed) ? Math.max(500, Math.min(3000, parsed)) : fallback;
+}
+
+function extractDailyActions(intent, fallback) {
+  const match = String(intent || "").match(/(?:每天|每日|day|daily|per day)[^\d]*(\d{1,2})|(\d{1,2})[^\d]*(?:次|times).*?(?:day|每天|每日)/i);
+  const value = Number(match?.[1] ?? match?.[2]);
+  return Number.isFinite(value) && value > 0 ? Math.max(1, Math.min(6, value)) : fallback;
+}
+
+function buildPlan(payload) {
+  const language = payload.language === "en" ? "en" : "zh";
+  const opportunity = payload.opportunity || {};
+  const strategy = strategyFromIntent(payload.intent, opportunity.strategy || "Balanced");
+  const risk = strategy === "Conservative" ? "Low" : strategy === "Aggressive" ? "High" : "Medium";
+  const pair = opportunity.pair || "gFLOW / aiUSD";
+  const maxCapitalBps = extractCapitalBps(payload.intent, Number(opportunity.maxCapitalBps || 3000));
+  const maxDailyActions = extractDailyActions(payload.intent, Number(opportunity.maxDailyActions || 3));
+  const minRangeWidth = Math.max(Number(opportunity.minRangeWidth || 600), strategy === "Conservative" ? 1200 : strategy === "Aggressive" ? 300 : 600);
+  const autoMode = /自动|autopilot|auto/i.test(String(payload.intent || "")) && !/不要|manual|confirm|确认/i.test(String(payload.intent || ""));
+  const poolId = payload.poolId || "pending";
+
+  if (language === "en") {
+    return {
+      title: `${pair} ${strategy} Agent Plan`,
+      summary: `The local Agent planner converted the treasury intent into a ${strategy} LP policy for ${pair}. Agentic Wallet can execute the calls, while the Vault and Hook enforce max capital, LP range width, daily action limits, and replay protection.`,
+      strategy,
+      risk,
+      pool: pair,
+      maxCapitalBps,
+      minRangeWidth,
+      maxDailyActions,
+      autoMode,
+      actions: ["Read Agentic Wallet assets", "Authorize selected Pool policy", "Report Hook risk and fee signal", "Submit LP management proposal", "Execute only after tx-scan"],
+      boundaries: [`Only PoolId ${short(poolId)}`, `Capital cap ${maxCapitalBps / 100}%`, `Range width >= ${minRangeWidth} ticks`, `Max ${maxDailyActions} daily actions`, "Replay-protected actionId"],
+      proof: ["Live Hook and Vault bytecode exist on X Layer", "Agentic Wallet authorization/signal/proposal txs are linked", "npm run verify:live verifies onchain state"],
+    };
+  }
+
+  return {
+    title: `${pair} ${strategy} Agent Plan`,
+    summary: `本地 Agent planner 已把资金目标转换成 ${pair} 的 ${strategy} LP 策略。Agentic Wallet 可以执行调用，但 Vault 和 Hook 会限制最大资金比例、LP 区间宽度、每日动作次数和 actionId 防重放。`,
+    strategy,
+    risk,
+    pool: pair,
+    maxCapitalBps,
+    minRangeWidth,
+    maxDailyActions,
+    autoMode,
+    actions: ["读取 Agentic Wallet 资产", "授权指定 Pool policy", "上报 Hook 风险/手续费信号", "提交 LP 管理 proposal", "通过 tx-scan 后执行"],
+    boundaries: [`只允许 PoolId ${short(poolId)}`, `资金上限 ${maxCapitalBps / 100}%`, `LP 区间宽度 >= ${minRangeWidth} ticks`, `每天最多 ${maxDailyActions} 次动作`, "actionId 防重放"],
+    proof: ["X Layer 上已有 Hook 和 Vault bytecode", "Agentic Wallet 授权/signal/proposal tx 已链接", "npm run verify:live 可验证链上状态"],
+  };
 }
 
 async function readBody(req) {
@@ -288,6 +358,49 @@ const server = http.createServer(async (req, res) => {
     const payload = await readBalance(sessionIdFrom(requestUrl.searchParams.get("sessionId")));
     res.writeHead(payload.ok ? 200 : 503, { "content-type": "application/json" });
     res.end(JSON.stringify(payload));
+    return;
+  }
+
+  if (requestUrl.pathname === "/agent/plan" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const intent = typeof payload.intent === "string" ? payload.intent.trim() : "";
+      if (!intent) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "intent_required" }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: true, planner: "deterministic-local-agent", plan: buildPlan(payload) }));
+    } catch (error) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/proof/live") {
+    try {
+      const manifest = JSON.parse(await readFile(manifestUrl, "utf8"));
+      const project = manifest.project || {};
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          status: manifest.status,
+          chain: manifest.chain,
+          hookAddress: project.hookAddress,
+          vaultAddress: project.treasuryVaultAddress,
+          agentAddress: project.agentAddress,
+          poolId: project.poolId,
+          actionId: project.actionId,
+          proofLedger: project.proofLedger,
+        }),
+      );
+    } catch (error) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    }
     return;
   }
 

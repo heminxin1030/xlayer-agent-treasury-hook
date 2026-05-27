@@ -2,18 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Bot,
+  Braces,
   CheckCircle2,
   ChevronDown,
   ClipboardCheck,
   Copy,
   ExternalLink,
+  FileCheck2,
   Languages,
   LogOut,
+  MessageSquare,
   Play,
   RefreshCcw,
   ScanSearch,
+  Send,
   Settings2,
   ShieldCheck,
+  Sparkles,
+  Terminal,
   Wallet,
 } from "lucide-react";
 import {
@@ -30,6 +36,7 @@ import {
 } from "viem";
 
 import { DEFAULTS, ERC20_ABI, HOOK_ABI, VAULT_ABI, X_LAYER } from "./contracts";
+import { explorerAddress, PUBLIC_PROOF } from "./proof";
 import {
   actionIdFor,
   buildPoolKey,
@@ -112,6 +119,26 @@ type ScanState = {
   summary: string;
 };
 
+type AgentPlan = {
+  title: string;
+  summary: string;
+  strategy: "Conservative" | "Balanced" | "Aggressive";
+  risk: "Low" | "Medium" | "High";
+  pool: string;
+  maxCapitalBps: number;
+  minRangeWidth: number;
+  maxDailyActions: number;
+  autoMode: boolean;
+  actions: string[];
+  boundaries: string[];
+  proof: string[];
+};
+
+type ChatMessage = {
+  role: "user" | "agent";
+  content: string;
+};
+
 type Language = "zh" | "en";
 type Menu = "wallet" | "asset" | "advanced" | null;
 
@@ -119,6 +146,10 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const STORAGE_KEY = "agent-treasury-hook:v3";
 const LANGUAGE_KEY = "agent-treasury-hook:language";
 const SESSION_KEY = "agent-treasury-hook:session";
+const DEFAULT_INTENTS = {
+  zh: "帮我用低风险方式管理 gFLOW/aiUSD LP，最多用 30% 资金，每天最多调仓 3 次，风险升高就暂停。",
+  en: "Manage gFLOW/aiUSD LP with low risk, use at most 30% capital, rebalance no more than 3 times per day, and pause if risk rises.",
+};
 
 function defaultGatewayUrl() {
   const fromQuery = new URLSearchParams(window.location.search).get("gateway");
@@ -132,11 +163,46 @@ const COPY = {
     brand: "Agent Treasury",
     brandSub: "X Layer Hook",
     language: "语言",
-    heroTitle: "AI Agent Treasury Hook",
-    heroCopy: "使用 OKX Agentic Wallet 登录：邮箱验证后自动恢复 Agent 钱包，由它在用户授权和 Hook 限制内管理 LP。",
+    heroTitle: "Conversational LP Agent",
+    heroCopy: "用自然语言给 Agent 下达资金管理目标。Agentic Wallet 负责执行，Uniswap v4 Hook 和 Vault 在链上限制 Agent 不能越权。",
     progressTitle: "流程进度",
-    steps: ["Agentic Wallet", "资产", "策略", "权限", "安全扫描", "执行"],
-    ready: "下一步：连接 Agentic Wallet，读取它在 X Layer 上的资产。",
+    steps: ["用户意图", "Agent Plan", "Agentic Wallet", "安全扫描", "链上执行", "Live Proof"],
+    ready: "输入一句资金管理目标，让 Agent 生成可执行的 LP 策略。",
+    agent: {
+      chatTitle: "告诉 Agent 你的资金目标",
+      chatSubtitle: "主交互是对话，不是让用户手动点一堆 DeFi 表单。Agent 生成策略，钱包执行，Hook 限制边界。",
+      placeholder: "例如：帮我用低风险方式管理 gFLOW/aiUSD LP，最多用 30% 资金，每天最多调仓 3 次，风险升高就暂停。",
+      generate: "生成 Agent Plan",
+      examples: ["低风险 LP，每天最多调仓 3 次", "最多用 30% 资金做 gFLOW/aiUSD", "如果风险升高就暂停，不要自动乱动钱"],
+      userLabel: "User intent",
+      agentLabel: "Agent response",
+      planTitle: "Agent 生成的策略计划",
+      planSubtitle: "这是 Agentic Wallet 后续要执行的结构化策略。真正的安全边界在 Vault 和 Hook 里。",
+      intentReady: "已解析自然语言目标",
+      localPlanner: "本地 deterministic planner",
+      prepareAuthorize: "准备授权策略边界",
+      prepareSignal: "准备 Hook 风险信号",
+      prepareProposal: "准备 Agent 提案",
+      scan: "安全扫描",
+      execute: "交给 Agentic Wallet",
+    },
+    proof: {
+      title: "Live X Layer Proof",
+      subtitle: "评委即使不运行本地 Agent，也能直接验证这些主网交易和 Hook/Vault 状态。",
+      hook: "Hook",
+      vault: "Vault",
+      agent: "Agentic Wallet",
+      pool: "PoolId",
+      action: "Executed actionId",
+      verify: "复现验证命令",
+      verified: "verify:live 已通过：Hook signal、Vault policy、actionId executed 都在链上成立。",
+    },
+    local: {
+      title: "本地 Agent Runtime 和高级执行",
+      subtitle: "线上页面负责展示和证明；真实 Agentic Wallet 执行建议在本地或可信 HTTPS Agent Gateway 里运行。",
+      run: "本地运行顺序",
+      security: "默认只读和安全扫描；真实写交易必须显式开启 AGENTIC_BRIDGE_WRITE=1。",
+    },
     wallet: {
       title: "连接 Agentic Wallet",
       connected: "已连接",
@@ -250,11 +316,46 @@ const COPY = {
     brand: "Agent Treasury",
     brandSub: "X Layer Hook",
     language: "Language",
-    heroTitle: "AI Agent Treasury Hook",
-    heroCopy: "Sign in with OKX Agentic Wallet. After email OTP verification, the Agent wallet is restored and can manage LP only inside user authorization and Hook limits.",
+    heroTitle: "Conversational LP Agent",
+    heroCopy: "Tell an Agent how to manage treasury liquidity. Agentic Wallet executes, while the Uniswap v4 Hook and Vault enforce the rules on X Layer.",
     progressTitle: "Progress",
-    steps: ["Agentic Wallet", "Assets", "Strategy", "Permission", "Scan", "Execute"],
-    ready: "Next: connect Agentic Wallet and load its X Layer assets.",
+    steps: ["Intent", "Agent Plan", "Agentic Wallet", "Security Scan", "Execution", "Live Proof"],
+    ready: "Describe a treasury goal and let the Agent turn it into an executable LP strategy.",
+    agent: {
+      chatTitle: "Tell the Agent your treasury goal",
+      chatSubtitle: "The main interaction is conversation, not a stack of DeFi forms. The Agent plans, Agentic Wallet executes, and the Hook constrains the boundaries.",
+      placeholder: "Example: manage gFLOW/aiUSD LP with low risk, use at most 30% capital, rebalance no more than 3 times per day, pause if risk rises.",
+      generate: "Generate Agent Plan",
+      examples: ["Low-risk LP, max 3 rebalances per day", "Use at most 30% capital on gFLOW/aiUSD", "Pause if risk rises; do not move funds freely"],
+      userLabel: "User intent",
+      agentLabel: "Agent response",
+      planTitle: "Agent-generated strategy plan",
+      planSubtitle: "This is the structured strategy Agentic Wallet can execute. The actual safety boundary is enforced by the Vault and Hook.",
+      intentReady: "Natural-language goal parsed",
+      localPlanner: "Local deterministic planner",
+      prepareAuthorize: "Prepare strategy boundary",
+      prepareSignal: "Prepare Hook risk signal",
+      prepareProposal: "Prepare Agent proposal",
+      scan: "Security scan",
+      execute: "Hand to Agentic Wallet",
+    },
+    proof: {
+      title: "Live X Layer Proof",
+      subtitle: "Judges can verify these mainnet transactions and Hook/Vault state even without running the local Agent.",
+      hook: "Hook",
+      vault: "Vault",
+      agent: "Agentic Wallet",
+      pool: "PoolId",
+      action: "Executed actionId",
+      verify: "Reproducible command",
+      verified: "verify:live passed: Hook signal, Vault policy, and actionId execution are all proven onchain.",
+    },
+    local: {
+      title: "Local Agent Runtime and Advanced Execution",
+      subtitle: "The public page explains and proves the system; real Agentic Wallet execution should run locally or behind a trusted HTTPS Agent Gateway.",
+      run: "Local run order",
+      security: "Read/scan-only by default; real writes require explicit AGENTIC_BRIDGE_WRITE=1.",
+    },
     wallet: {
       title: "Connect Agentic Wallet",
       connected: "Connected",
@@ -391,6 +492,13 @@ function loadLanguage(): Language {
   return navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en";
 }
 
+function initialAgentMessage(language: Language) {
+  if (language === "zh") {
+    return "告诉我资金目标。我会把它转换成 Agentic Wallet 可以执行、Hook 可以限制的 Pool 策略。";
+  }
+  return "Tell me the treasury objective. I will convert it into pool limits that Agentic Wallet can execute and the Hook can enforce.";
+}
+
 function short(value: string): string {
   if (!value || value.length < 12) return value || "-";
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
@@ -425,6 +533,14 @@ export function App() {
   const [lastTx, setLastTx] = useState<Hex | "">("");
   const [menu, setMenu] = useState<Menu>(null);
   const [status, setStatus] = useState<string>(() => COPY[loadLanguage()].ready);
+  const [intent, setIntent] = useState(() => DEFAULT_INTENTS[loadLanguage()]);
+  const [chat, setChat] = useState<ChatMessage[]>(() => [
+    {
+      role: "agent",
+      content: initialAgentMessage(loadLanguage()),
+    },
+  ]);
+  const [agentPlan, setAgentPlan] = useState<AgentPlan | null>(null);
 
   const c = COPY[language];
   const publicClient = useMemo(() => createPublicClient({ chain: X_LAYER, transport: http("https://rpc.xlayer.tech") }), []);
@@ -437,6 +553,7 @@ export function App() {
     [config.hook, selected.token0, selected.token1],
   );
   const poolId = useMemo(() => poolIdFor(poolKey), [poolKey]);
+  const activePlan = useMemo(() => agentPlan ?? buildAgentPlan(intent, selected, language), [agentPlan, intent, language, selected]);
   const assets = useMemo(() => buildAssets(config, balances, assetInfo, bridgeTokens), [assetInfo, balances, bridgeTokens, config]);
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets[0];
   const hasAgenticWallet = Boolean(agentic.ok && agentic.address);
@@ -617,6 +734,45 @@ export function App() {
     }
     await navigator.clipboard.writeText(agentic.address);
     setStatus(c.status.copied);
+  }
+
+  async function generateAgentPlan(nextIntent = intent) {
+    const cleanIntent = nextIntent.trim() || DEFAULT_INTENTS[language];
+    const plannedOpportunity = chooseOpportunityForIntent(cleanIntent, opportunities);
+    setSelectedId(plannedOpportunity.id);
+
+    let nextPlan: AgentPlan | null = null;
+    if (gatewayUrl) {
+      try {
+        const response = await fetch(gatewayEndpoint("/agent/plan"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            intent: cleanIntent,
+            language,
+            poolId,
+            opportunity: plannedOpportunity,
+          }),
+        });
+        const payload = await response.json();
+        if (response.ok && payload.plan) nextPlan = normalizePlan(payload.plan, plannedOpportunity, language);
+      } catch {
+        nextPlan = null;
+      }
+    }
+
+    const plan = nextPlan ?? buildAgentPlan(cleanIntent, plannedOpportunity, language);
+    setAgentPlan(plan);
+    setChat([
+      { role: "user", content: cleanIntent },
+      { role: "agent", content: plan.summary },
+    ]);
+    setStatus(c.agent.intentReady);
+  }
+
+  function useExample(example: string) {
+    setIntent(example);
+    void generateAgentPlan(example);
   }
 
   function prepareApprove() {
@@ -887,12 +1043,12 @@ export function App() {
 
         <div className="rail-section">
           <span className="rail-title">{c.progressTitle}</span>
-          <ProgressItem label={c.steps[0]} done={hasAgenticWallet} detail={agentic.address ? short(agentic.address) : c.wallet.disconnected} />
-          <ProgressItem label={c.steps[1]} done={Number(balances.okb ?? "0") > 0 || bridgeTokens.length > 0} detail={selectedAsset?.symbol ?? "-"} />
-          <ProgressItem label={c.steps[2]} done={Boolean(selected)} detail={selectedText.title} />
-          <ProgressItem label={c.steps[3]} done={isAuthorized} detail={isAuthorized ? c.opportunityStatus.authorized : c.opportunityStatus.pending} />
-          <ProgressItem label={c.steps[4]} done={scanDone} detail={scanState?.action || "-"} />
-          <ProgressItem label={c.steps[5]} done={hasExecutionProof} detail={lastTx ? short(lastTx) : "-"} />
+          <ProgressItem label={c.steps[0]} done={intent.trim().length > 0} detail={intent.trim() ? short(intent) : "-"} />
+          <ProgressItem label={c.steps[1]} done={Boolean(activePlan)} detail={activePlan.strategy} />
+          <ProgressItem label={c.steps[2]} done={hasAgenticWallet} detail={agentic.address ? short(agentic.address) : c.wallet.disconnected} />
+          <ProgressItem label={c.steps[3]} done={scanDone} detail={scanState?.action || "-"} />
+          <ProgressItem label={c.steps[4]} done={isAuthorized || hasExecutionProof} detail={lastTx ? short(lastTx) : c.opportunityStatus.pending} />
+          <ProgressItem label={c.steps[5]} done detail={short(PUBLIC_PROOF.agentAddress)} />
         </div>
 
         <div className="rail-card">
@@ -956,180 +1112,279 @@ export function App() {
           <strong>{config.manualApproval ? c.permission.manual : "Autopilot"}</strong>
         </div>
 
-        <section className="step-panel">
-          <div className="step-copy">
-            <span className="step-index">1</span>
-            <div>
-              <h2>{c.wallet.title}</h2>
-              <p>{agentic.address ? c.status.connected(short(agentic.address)) : c.ready}</p>
+        <div className="agent-board">
+          <section className="agent-card chat-card">
+            <div className="section-heading">
+              <span className="section-icon"><MessageSquare size={18} /></span>
+              <div>
+                <h2>{c.agent.chatTitle}</h2>
+                <p>{c.agent.chatSubtitle}</p>
+              </div>
             </div>
-          </div>
-          <div className="login-grid">
-            <Field label={c.wallet.email}>
-              <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@example.com" />
-            </Field>
-            <Field label={c.wallet.otp}>
-              <input value={otp} onChange={(event) => setOtp(event.target.value)} placeholder="123456" />
-            </Field>
-            <div className="login-hint">{c.wallet.loginHint}</div>
-          </div>
-          <div className="quick-actions">
-            <button className="primary" onClick={sendOtp}>{c.wallet.sendOtp}</button>
-            <button onClick={verifyOtp}>
-              <Bot size={18} /> {c.wallet.verifyOtp}
-            </button>
-            <button onClick={connectAgenticWallet}>{c.wallet.connect}</button>
-            <button onClick={() => refreshAssets()}>
-              <RefreshCcw size={18} /> {c.wallet.refresh}
-            </button>
-            <button onClick={disconnectAgenticWallet}>
-              <LogOut size={18} /> {c.wallet.disconnect}
-            </button>
-          </div>
-        </section>
-
-        <section className="step-panel">
-          <div className="step-copy">
-            <span className="step-index">2</span>
-            <div>
-              <h2>{c.fund.title}</h2>
-              <p>{c.fund.subtitle}</p>
-            </div>
-          </div>
-          <div className="receive-box">
-            <span>{c.fund.receive}</span>
-            <code>{agentic.address ?? "-"}</code>
-            <button onClick={copyReceiveAddress}>
-              <Copy size={18} /> {c.fund.copyAddress}
-            </button>
-          </div>
-          <div className="assets-strip">
-            {assets.map((asset) => (
-              <button
-                key={asset.id}
-                className={asset.id === selectedAssetId ? "asset-pill selected" : "asset-pill"}
-                onClick={() => setSelectedAssetId(asset.id)}
-              >
-                <span>{asset.symbol}</span>
-                <strong>{asset.balance}</strong>
-                <small>{asset.canVaultDeposit ? "Vault" : "Gas"}</small>
-              </button>
-            ))}
-          </div>
-          <div className="fund-grid">
-            <div className="asset-picker">
-              <button onClick={() => setMenu(menu === "asset" ? null : "asset")}>
-                <span>
-                  {selectedAsset?.symbol ?? c.fund.assetButton}
-                  <small>{selectedAsset ? `${selectedAsset.balance} ${selectedAsset.symbol}` : c.fund.empty}</small>
-                </span>
-                <ChevronDown size={16} />
-              </button>
-              {menu === "asset" ? (
-                <div className="dropdown asset-menu">
-                  {assets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      className={asset.id === selectedAssetId ? "selected-row" : ""}
-                      onClick={() => {
-                        setSelectedAssetId(asset.id);
-                        setMenu(null);
-                      }}
-                    >
-                      <span>
-                        {asset.symbol}
-                        <small>{asset.name}</small>
-                      </span>
-                      <strong>{asset.balance}</strong>
-                    </button>
-                  ))}
+            <div className="chat-window">
+              {chat.map((message, index) => (
+                <div key={`${message.role}-${index}`} className={`chat-message ${message.role}`}>
+                  <span>{message.role === "user" ? c.agent.userLabel : c.agent.agentLabel}</span>
+                  <p>{message.content}</p>
                 </div>
-              ) : null}
+              ))}
             </div>
-            <label className="field compact-field">
-              <span>{c.fund.amount}</span>
-              <input value={amount} onChange={(event) => setAmount(event.target.value)} />
-            </label>
-            <button onClick={prepareApprove} disabled={!hasVaultAsset}>
-              <ClipboardCheck size={18} /> {c.fund.approve}
+            <textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder={c.agent.placeholder} />
+            <div className="intent-chips">
+              {c.agent.examples.map((example) => (
+                <button key={example} onClick={() => useExample(example)}>
+                  <Sparkles size={15} /> {example}
+                </button>
+              ))}
+            </div>
+            <button className="primary wide-action" onClick={() => generateAgentPlan()}>
+              <Send size={18} /> {c.agent.generate}
             </button>
-            <button className="primary" onClick={prepareDeposit} disabled={!hasVaultAsset}>
-              <Wallet size={18} /> {c.fund.deposit}
-            </button>
-          </div>
-          {selectedAsset && !selectedAsset.canVaultDeposit ? <p className="inline-note">{c.fund.gasOnly}</p> : null}
-        </section>
+          </section>
 
-        <section className="step-panel">
-          <div className="step-copy">
-            <span className="step-index">3</span>
+          <section className="agent-card plan-card">
+            <div className="section-heading">
+              <span className="section-icon"><Braces size={18} /></span>
+              <div>
+                <h2>{c.agent.planTitle}</h2>
+                <p>{c.agent.planSubtitle}</p>
+              </div>
+            </div>
+            <div className="plan-summary">
+              <strong>{activePlan.title}</strong>
+              <p>{activePlan.summary}</p>
+            </div>
+            <div className="plan-metrics">
+              <Metric label="Strategy" value={activePlan.strategy} />
+              <Metric label="Risk" value={c.risk[activePlan.risk]} />
+              <Metric label="Capital cap" value={`${activePlan.maxCapitalBps / 100}%`} />
+              <Metric label="Daily actions" value={String(activePlan.maxDailyActions)} />
+            </div>
+            <div className="agent-lists">
+              <PlanList title="Agent actions" items={activePlan.actions} />
+              <PlanList title="Hook boundaries" items={activePlan.boundaries} />
+            </div>
+            <div className="execution-path">
+              <PathNode label="Intent" detail={short(intent)} />
+              <PathNode label="Agent Plan" detail={activePlan.strategy} />
+              <PathNode label="Agentic Wallet" detail={agentic.address ? short(agentic.address) : c.wallet.disconnected} />
+              <PathNode label="Vault + Hook" detail="policy enforced" />
+              <PathNode label="X Layer Proof" detail={short(PUBLIC_PROOF.poolId)} />
+            </div>
+            <div className="quick-actions">
+              <button className="primary" onClick={prepareAuthorizeSelectedPool}>
+                <ShieldCheck size={18} /> {c.agent.prepareAuthorize}
+              </button>
+              <button onClick={prepareOpportunitySignal}>{c.agent.prepareSignal}</button>
+              <button onClick={prepareAgentProposal}>{c.agent.prepareProposal}</button>
+              <button onClick={scanPreparedAction}>
+                <ScanSearch size={18} /> {c.agent.scan}
+              </button>
+              <button onClick={executePreparedAction}>
+                <Play size={18} /> {c.agent.execute}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <section className="agent-card proof-card">
+          <div className="section-heading">
+            <span className="section-icon"><FileCheck2 size={18} /></span>
             <div>
-              <h2>{c.strategy.title}</h2>
-              <p>{c.strategy.subtitle}</p>
+              <h2>{c.proof.title}</h2>
+              <p>{c.proof.subtitle}</p>
             </div>
           </div>
-          <div className="strategy-grid">
-            {opportunities.map((opportunity) => (
-              <StrategyCard
-                key={opportunity.id}
-                opportunity={opportunity}
-                selected={selected.id === opportunity.id}
-                authorized={Boolean(authorized[opportunity.id])}
-                language={language}
-                onSelect={() => setSelectedId(opportunity.id)}
-              />
+          <div className="proof-grid proof-grid-live">
+            <KeyValue label={c.proof.hook} value={explorerAddress(PUBLIC_PROOF.hookAddress)} link />
+            <KeyValue label={c.proof.vault} value={explorerAddress(PUBLIC_PROOF.vaultAddress)} link />
+            <KeyValue label={c.proof.agent} value={PUBLIC_PROOF.agentAddress} />
+            <KeyValue label={c.proof.pool} value={PUBLIC_PROOF.poolId} />
+            <KeyValue label={c.proof.action} value={PUBLIC_PROOF.actionId} />
+            <KeyValue label={c.proof.verify} value="npm run verify:live" />
+          </div>
+          <div className="tx-ledger">
+            {PUBLIC_PROOF.proofTxs.map((tx) => (
+              <a key={tx.hash} href={explorerTx(tx.hash as Hex)} target="_blank" rel="noreferrer">
+                <span>{tx.label}</span>
+                <code>{short(tx.hash)}</code>
+                <ExternalLink size={14} />
+              </a>
             ))}
           </div>
-        </section>
-
-        <section className="step-panel">
-          <div className="step-copy">
-            <span className="step-index">4</span>
-            <div>
-              <h2>{c.permission.title}</h2>
-              <p>{c.permission.subtitle}</p>
-            </div>
-          </div>
-          <div className="permission-grid">
-            <PermissionList title={c.permission.can} items={c.permission.canItems} positive />
-            <PermissionList title={c.permission.cannot} items={c.permission.cannotItems} />
-            <div className="policy-box">
-              <Metric label="APR" value={`${selected.feeApr.toFixed(1)}%`} />
-              <Metric label="Risk" value={c.risk[selectedRisk]} />
-              <Metric label="Capital cap" value={`${selected.maxCapitalBps / 100}%`} />
-              <Metric label="Daily actions" value={String(selected.maxDailyActions)} />
-            </div>
-          </div>
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={config.manualApproval}
-              onChange={(event) => update("manualApproval", event.target.checked)}
-            />
-            {c.permission.manual}
-          </label>
-          <div className="quick-actions">
-            <button className="primary" onClick={prepareAuthorizeSelectedPool}>
-              <ShieldCheck size={18} /> {c.permission.authorize}
-            </button>
-            <button onClick={prepareAgentProposal}>{c.permission.proposal}</button>
-            <button onClick={prepareOpportunitySignal}>{c.permission.signal}</button>
-            <button onClick={scanPreparedAction}>
-              <ScanSearch size={18} /> {c.advanced.scan}
-            </button>
-            <button onClick={executePreparedAction}>
-              <Play size={18} /> Agentic
-            </button>
-          </div>
+          <p className="inline-note">{c.proof.verified}</p>
         </section>
 
         <section className="advanced-block">
           <button className="advanced-toggle" onClick={() => setMenu(menu === "advanced" ? null : "advanced")}>
-            <Settings2 size={18} /> {c.advanced.title} <ChevronDown size={16} />
+            <Settings2 size={18} /> {c.local.title} <ChevronDown size={16} />
           </button>
           {menu === "advanced" ? (
-            <div className="advanced-panel">
-              <p>{c.advanced.subtitle}</p>
+            <div className="advanced-panel execution-lab">
+              <p>{c.local.subtitle}</p>
+              <div className="runbook-grid">
+                <div>
+                  <span>{c.local.run}</span>
+                  <code>npm run agentic:bridge:local</code>
+                  <code>npm run proof:agentic</code>
+                  <code>npm run verify:live</code>
+                </div>
+                <div>
+                  <span>{c.wallet.bridge}</span>
+                  <strong>{gatewayUrl || c.status.needGateway}</strong>
+                  <p>{c.local.security}</p>
+                </div>
+              </div>
+
+              <section className="step-panel embedded-panel">
+                <div className="step-copy">
+                  <span className="step-index">1</span>
+                  <div>
+                    <h2>{c.wallet.title}</h2>
+                    <p>{agentic.address ? c.status.connected(short(agentic.address)) : c.ready}</p>
+                  </div>
+                </div>
+                <div className="login-grid">
+                  <Field label={c.wallet.email}>
+                    <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@example.com" />
+                  </Field>
+                  <Field label={c.wallet.otp}>
+                    <input value={otp} onChange={(event) => setOtp(event.target.value)} placeholder="123456" />
+                  </Field>
+                  <div className="login-hint">{c.wallet.loginHint}</div>
+                </div>
+                <div className="quick-actions">
+                  <button className="primary" onClick={sendOtp}>{c.wallet.sendOtp}</button>
+                  <button onClick={verifyOtp}>
+                    <Bot size={18} /> {c.wallet.verifyOtp}
+                  </button>
+                  <button onClick={connectAgenticWallet}>{c.wallet.connect}</button>
+                  <button onClick={() => refreshAssets()}>
+                    <RefreshCcw size={18} /> {c.wallet.refresh}
+                  </button>
+                  <button onClick={disconnectAgenticWallet}>
+                    <LogOut size={18} /> {c.wallet.disconnect}
+                  </button>
+                </div>
+              </section>
+
+              <section className="step-panel embedded-panel">
+                <div className="step-copy">
+                  <span className="step-index">2</span>
+                  <div>
+                    <h2>{c.fund.title}</h2>
+                    <p>{c.fund.subtitle}</p>
+                  </div>
+                </div>
+                <div className="receive-box">
+                  <span>{c.fund.receive}</span>
+                  <code>{agentic.address ?? "-"}</code>
+                  <button onClick={copyReceiveAddress}>
+                    <Copy size={18} /> {c.fund.copyAddress}
+                  </button>
+                </div>
+                <div className="assets-strip">
+                  {assets.map((asset) => (
+                    <button
+                      key={asset.id}
+                      className={asset.id === selectedAssetId ? "asset-pill selected" : "asset-pill"}
+                      onClick={() => setSelectedAssetId(asset.id)}
+                    >
+                      <span>{asset.symbol}</span>
+                      <strong>{asset.balance}</strong>
+                      <small>{asset.canVaultDeposit ? "Vault" : "Gas"}</small>
+                    </button>
+                  ))}
+                </div>
+                <div className="fund-grid">
+                  <div className="selected-asset-box">
+                    <span>{c.fund.assetButton}</span>
+                    <strong>{selectedAsset ? `${selectedAsset.balance} ${selectedAsset.symbol}` : c.fund.empty}</strong>
+                  </div>
+                  <label className="field compact-field">
+                    <span>{c.fund.amount}</span>
+                    <input value={amount} onChange={(event) => setAmount(event.target.value)} />
+                  </label>
+                  <button onClick={prepareApprove} disabled={!hasVaultAsset}>
+                    <ClipboardCheck size={18} /> {c.fund.approve}
+                  </button>
+                  <button className="primary" onClick={prepareDeposit} disabled={!hasVaultAsset}>
+                    <Wallet size={18} /> {c.fund.deposit}
+                  </button>
+                </div>
+                {selectedAsset && !selectedAsset.canVaultDeposit ? <p className="inline-note">{c.fund.gasOnly}</p> : null}
+              </section>
+
+              <section className="step-panel embedded-panel">
+                <div className="step-copy">
+                  <span className="step-index">3</span>
+                  <div>
+                    <h2>{c.strategy.title}</h2>
+                    <p>{c.strategy.subtitle}</p>
+                  </div>
+                </div>
+                <div className="strategy-grid">
+                  {opportunities.map((opportunity) => (
+                    <StrategyCard
+                      key={opportunity.id}
+                      opportunity={opportunity}
+                      selected={selected.id === opportunity.id}
+                      authorized={Boolean(authorized[opportunity.id])}
+                      language={language}
+                      onSelect={() => setSelectedId(opportunity.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+
+              <section className="step-panel embedded-panel">
+                <div className="step-copy">
+                  <span className="step-index">4</span>
+                  <div>
+                    <h2>{c.permission.title}</h2>
+                    <p>{c.permission.subtitle}</p>
+                  </div>
+                </div>
+                <div className="permission-grid">
+                  <PermissionList title={c.permission.can} items={c.permission.canItems} positive />
+                  <PermissionList title={c.permission.cannot} items={c.permission.cannotItems} />
+                  <div className="policy-box">
+                    <Metric label="APR" value={`${selected.feeApr.toFixed(1)}%`} />
+                    <Metric label="Risk" value={c.risk[selectedRisk]} />
+                    <Metric label="Capital cap" value={`${selected.maxCapitalBps / 100}%`} />
+                    <Metric label="Daily actions" value={String(selected.maxDailyActions)} />
+                  </div>
+                </div>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={config.manualApproval}
+                    onChange={(event) => update("manualApproval", event.target.checked)}
+                  />
+                  {c.permission.manual}
+                </label>
+                <div className="quick-actions">
+                  <button className="primary" onClick={prepareAuthorizeSelectedPool}>
+                    <ShieldCheck size={18} /> {c.permission.authorize}
+                  </button>
+                  <button onClick={prepareAgentProposal}>{c.permission.proposal}</button>
+                  <button onClick={prepareOpportunitySignal}>{c.permission.signal}</button>
+                  <button onClick={scanPreparedAction}>
+                    <ScanSearch size={18} /> {c.advanced.scan}
+                  </button>
+                  <button onClick={executePreparedAction}>
+                    <Play size={18} /> Agentic
+                  </button>
+                </div>
+              </section>
+
+              <div className="section-heading">
+                <span className="section-icon"><Terminal size={18} /></span>
+                <div>
+                  <h2>{c.advanced.title}</h2>
+                  <p>{c.advanced.subtitle}</p>
+                </div>
+              </div>
               <div className="advanced-grid">
                 <Field label={c.wallet.gateway}>
                   <input value={config.gatewayUrl} onChange={(event) => update("gatewayUrl", event.target.value)} placeholder="https://agent-gateway.example.com" />
@@ -1264,6 +1519,99 @@ function isHex(value: unknown): value is Hex {
   return typeof value === "string" && /^0x[a-fA-F0-9]+$/.test(value);
 }
 
+function chooseOpportunityForIntent(intent: string, opportunities: Opportunity[]) {
+  const text = intent.toLowerCase();
+  if (/保守|低风险|low|conservative|wide|暂停|pause/.test(text)) {
+    return opportunities.find((item) => item.strategy === "Conservative") ?? opportunities[0];
+  }
+  if (/激进|高收益|aggressive|high fee|收益|capture/.test(text)) {
+    return opportunities.find((item) => item.strategy === "Aggressive") ?? opportunities[0];
+  }
+  return opportunities.find((item) => item.strategy === "Balanced") ?? opportunities[0];
+}
+
+function extractCapitalBps(intent: string, fallback: number) {
+  const percent = intent.match(/(\d{1,2})(?:\s*)%/);
+  if (!percent) return fallback;
+  const parsed = Number(percent[1]) * 100;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(500, Math.min(3000, parsed));
+}
+
+function extractDailyActions(intent: string, fallback: number) {
+  const match = intent.match(/(?:每天|每日|day|daily|per day)[^\d]*(\d{1,2})|(\d{1,2})[^\d]*(?:次|times).*?(?:day|每天|每日)/i);
+  const value = Number(match?.[1] ?? match?.[2]);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.max(1, Math.min(6, value));
+}
+
+function buildAgentPlan(intent: string, opportunity: Opportunity, language: Language): AgentPlan {
+  const conservative = opportunity.strategy === "Conservative";
+  const aggressive = opportunity.strategy === "Aggressive";
+  const risk = conservative ? "Low" : aggressive ? "High" : "Medium";
+  const maxCapitalBps = extractCapitalBps(intent, opportunity.maxCapitalBps);
+  const maxDailyActions = extractDailyActions(intent, opportunity.maxDailyActions);
+  const autoMode = /自动|autopilot|auto/i.test(intent) && !/不要|manual|confirm|确认/i.test(intent);
+  const minRangeWidth = conservative ? Math.max(opportunity.minRangeWidth, 1200) : aggressive ? opportunity.minRangeWidth : Math.max(opportunity.minRangeWidth, 600);
+
+  if (language === "zh") {
+    return {
+      title: `${opportunity.pair} ${opportunity.strategy} Agent Plan`,
+      summary: `我会把你的目标转换为 ${opportunity.pair} 的 ${opportunity.strategy} LP 策略：最多使用 ${maxCapitalBps / 100}% 资金，每天最多 ${maxDailyActions} 次动作，风险等级 ${risk}。Agentic Wallet 只负责执行，Vault 和 Hook 会在链上限制它不能越权。`,
+      strategy: opportunity.strategy,
+      risk,
+      pool: opportunity.pair,
+      maxCapitalBps,
+      minRangeWidth,
+      maxDailyActions,
+      autoMode,
+      actions: ["读取 Agentic Wallet 资产", "授权指定 Pool policy", "上报 Hook 风险/手续费信号", "提交 LP 管理 proposal", "通过安全扫描后执行"],
+      boundaries: [
+        `只允许 PoolId ${short(PUBLIC_PROOF.poolId)}`,
+        `资金上限 ${maxCapitalBps / 100}%`,
+        `LP 区间宽度不少于 ${minRangeWidth} ticks`,
+        `每天最多 ${maxDailyActions} 次动作`,
+        "actionId 防重放，超出策略会 revert",
+      ],
+      proof: ["Agentic Wallet 已执行授权、signal、proposal", "Hook 已校验 LP action", "npm run verify:live 可复现验证"],
+    };
+  }
+
+  return {
+    title: `${opportunity.pair} ${opportunity.strategy} Agent Plan`,
+    summary: `I converted the intent into a ${opportunity.strategy} LP strategy for ${opportunity.pair}: use at most ${maxCapitalBps / 100}% capital, allow no more than ${maxDailyActions} daily actions, and keep risk at ${risk}. Agentic Wallet executes; the Vault and Hook enforce the boundaries onchain.`,
+    strategy: opportunity.strategy,
+    risk,
+    pool: opportunity.pair,
+    maxCapitalBps,
+    minRangeWidth,
+    maxDailyActions,
+    autoMode,
+    actions: ["Read Agentic Wallet assets", "Authorize the selected Pool policy", "Report Hook risk and fee signal", "Submit LP management proposal", "Execute only after security scan"],
+    boundaries: [
+      `Only PoolId ${short(PUBLIC_PROOF.poolId)}`,
+      `Capital cap ${maxCapitalBps / 100}%`,
+      `LP range width at least ${minRangeWidth} ticks`,
+      `Max ${maxDailyActions} daily actions`,
+      "Replay-protected actionId; policy violations revert",
+    ],
+    proof: ["Agentic Wallet executed authorization, signal, and proposal", "Hook validated the LP action", "npm run verify:live reproduces the proof"],
+  };
+}
+
+function normalizePlan(plan: Partial<AgentPlan>, opportunity: Opportunity, language: Language): AgentPlan {
+  const fallback = buildAgentPlan("", opportunity, language);
+  return {
+    ...fallback,
+    ...plan,
+    strategy: plan.strategy ?? fallback.strategy,
+    risk: plan.risk ?? fallback.risk,
+    actions: Array.isArray(plan.actions) && plan.actions.length ? plan.actions : fallback.actions,
+    boundaries: Array.isArray(plan.boundaries) && plan.boundaries.length ? plan.boundaries : fallback.boundaries,
+    proof: Array.isArray(plan.proof) && plan.proof.length ? plan.proof : fallback.proof,
+  };
+}
+
 function ProgressItem({ label, done, detail }: { label: string; done: boolean; detail: string }) {
   return (
     <div className={done ? "progress-item done" : "progress-item"}>
@@ -1272,6 +1620,29 @@ function ProgressItem({ label, done, detail }: { label: string; done: boolean; d
         <strong>{label}</strong>
         <small>{detail}</small>
       </span>
+    </div>
+  );
+}
+
+function PlanList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="plan-list">
+      <h3>{title}</h3>
+      {items.map((item) => (
+        <div key={item}>
+          <CheckCircle2 size={16} />
+          <span>{item}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PathNode({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div className="path-node">
+      <span>{label}</span>
+      <strong>{detail}</strong>
     </div>
   );
 }

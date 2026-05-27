@@ -6,7 +6,7 @@ AI Agent Treasury Hook
 
 ## Short Description
 
-AI Agent Treasury Hook lets an OKX/X Layer user fund an Agentic Wallet, authorize selected Uniswap v4 LP opportunities, and let that Agentic Wallet manage liquidity only inside Hook-enforced risk limits.
+AI Agent Treasury Hook lets a user describe an LP treasury goal in natural language, lets OKX Agentic Wallet execute the resulting strategy, and uses a Uniswap v4 Hook/Vault policy layer to stop the Agent from exceeding user-approved risk limits.
 
 ## Problem
 
@@ -18,9 +18,11 @@ The missing piece is a pool-level execution boundary: the Agent should discover 
 
 AI Agent Treasury Hook creates a bounded Agent LP manager:
 
+- User describes a treasury goal in the Agent chat, such as low-risk LP, max 30% capital, and max 3 rebalances per day.
+- The deterministic local Agent planner converts that sentence into a structured LP policy.
 - User funds the Agentic Wallet receive address from OKX Wallet, an exchange, or another wallet.
 - The app displays Agentic Wallet funds on X Layer, including OKB gas and usable ERC20 assets.
-- Agent discovers LP opportunities and ranks them by volume, TVL, fee APR, volatility, and concentration risk.
+- Agent ranks LP opportunities by volume, TVL, fee APR, volatility, and concentration risk.
 - User authorizes a specific v4 pool with limits: max capital bps, minimum LP range width, max daily actions, strategy mode, and manual/autopilot mode.
 - Agentic Wallet prepares approve, deposit, authorization, signal, and proposal calls.
 - Each prepared call can be scanned with OKX security `tx-scan` before execution.
@@ -30,9 +32,9 @@ AI Agent Treasury Hook creates a bounded Agent LP manager:
 
 ## Why It Is Innovative
 
-This is not another dynamic-fee Hook. The Hook is the execution layer for an Agent-owned treasury workflow.
+This is not another dynamic-fee Hook. The Hook is the execution layer for a conversational Agent-owned treasury workflow.
 
-The core idea is that Agentic Wallets should not only swap tokens. They should be able to manage productive DeFi positions under user-approved onchain constraints. If this model works, it becomes a new X Layer entry point: users fund an Agentic Wallet, authorize a pool, and let Agents operate within visible Hook rules.
+The core idea is that Agentic Wallets are for Agents, not just humans clicking wallet buttons. Users should state goals; Agents should operate; Hooks should make those Agents governable. If this model works, it becomes a new X Layer entry point: users fund an Agentic Wallet, authorize a pool, and let Agents operate within visible Hook rules.
 
 ## Market Potential
 
@@ -51,9 +53,9 @@ Longer term, the same pattern can support multiple Agent strategies: stablecoin 
 - OpenZeppelin Uniswap Hooks `BaseHook`.
 - Solidity `AgentTreasuryHook` and `AgentTreasuryVault`.
 - Foundry tests and deployment scripts.
-- React + Vite + viem app.
-- Chinese/English guided operator UI with Agentic Wallet-only connection, receive address, funds display, asset picker, imported-token balances, prepared actions, security scan, and advanced deployment details hidden by default.
-- OKX Agentic Wallet CLI bridge for status, balances, `tx-scan`, and optional `wallet contract-call`.
+- React + Vite + viem conversational Agent app.
+- Chinese/English Agent chat, deterministic local planner, structured LP policy card, execution path, live proof ledger, and advanced Agentic Wallet execution controls hidden by default.
+- OKX Agentic Wallet CLI bridge for status, balances, `/agent/plan`, `/proof/live`, `tx-scan`, and optional `wallet contract-call`.
 - X Layer mainnet, chain ID `196`.
 
 ## Agent And Hook Strategy
@@ -68,15 +70,15 @@ The MVP does not need an LLM to hold keys or directly move funds. The LLM is an 
 ## Demo Plan
 
 1. Run `npm run test:all`.
-2. Open the app and show the OKX-style console.
-3. Start `npm run agentic:bridge` and connect Agentic Wallet.
-4. Show Agentic Wallet receive address and funds display.
-5. Fund the Agentic Wallet with tiny test assets if needed.
-6. Show demo token pair, Hook, Vault, Agent address, and pool id.
-7. Prepare ERC20 approval and Vault deposit calldata, run `tx-scan`, then execute through Agentic Wallet only in write mode.
-8. Select an LP opportunity and prepare pool policy authorization.
-9. Prepare Hook signal and Agent rebalance proposal.
-10. Show explorer links and emitted events in the proof log.
+2. Open the app and show the conversational Agent treasury page.
+3. Type a natural-language goal: low-risk gFLOW/aiUSD LP, max 30% capital, max 3 daily actions.
+4. Show the generated Agent Plan, Hook boundaries, and execution path.
+5. Start `npm run agentic:bridge:local` and connect Agentic Wallet.
+6. Show Agentic Wallet receive address, funds display, and local proof.
+7. Prepare strategy authorization, Hook signal, and Agent proposal from the plan.
+8. Run `tx-scan`, then execute through Agentic Wallet only in write mode.
+9. Show explorer links for the already completed mainnet authorization, signal, proposal, and Hook-validated LP action.
+10. Run `npm run verify:live` to prove the onchain Hook/Vault state.
 
 ## Required Links
 
@@ -96,4 +98,4 @@ The MVP does not need an LLM to hold keys or directly move funds. The LLM is an 
 
 ## One-Liner For X
 
-Built for Build X: AI Agent Treasury Hook turns OKX Agentic Wallet funds into user-approved Agent LP treasuries on X Layer, with Uniswap v4 Hook enforcement for pool selection, capital caps, range width, daily action limits, and dynamic fee signals.
+Built for Build X: AI Agent Treasury Hook turns natural-language treasury goals into Agentic Wallet LP actions on X Layer, with Uniswap v4 Hook enforcement for pool selection, capital caps, range width, daily action limits, and dynamic fee signals.

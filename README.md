@@ -1,6 +1,6 @@
 # AI Agent Treasury Hook
 
-AI Agent Treasury Hook is an X Layer + Uniswap v4 project where a user funds an OKX Agentic Wallet, the Agentic Wallet manages treasury assets, and a Hook enforces the user's risk limits whenever liquidity is added, removed, or rebalanced.
+AI Agent Treasury Hook is an X Layer + Uniswap v4 project where a user gives an Agent a natural-language LP treasury goal, OKX Agentic Wallet executes the resulting plan, and a Hook enforces the user's risk limits whenever liquidity is added, removed, or rebalanced.
 
 This version includes live X Layer mainnet proof. Demo video recording, final X post, and the hackathon submission form still require owner approval before final submission.
 
@@ -19,10 +19,11 @@ Most v4 hackathon entries improve a swap path: dynamic fee, limit order, TWAP, o
 2. The gateway calls OKX OnchainOS / Agentic Wallet services; it is not a separate wallet server and never holds private keys.
 3. The user funds the Agentic Wallet receive address from OKX Wallet, an exchange, or another wallet.
 4. The app displays Agentic Wallet assets on X Layer so the user can decide what can be used.
-5. The Agent ranks LP opportunities by fee APR, TVL, volume, volatility, and concentration risk.
-6. The user authorizes one selected pool with hard limits: max capital, min range width, daily action count, strategy mode, and manual/autopilot mode.
-7. Agentic Wallet executes approve/deposit/authorize/proposal actions only after safety scan and user-controlled write mode.
-8. The Hook enforces those limits inside Uniswap v4 liquidity callbacks.
+5. The user describes a treasury goal in the Agent chat, for example: "low-risk gFLOW/aiUSD LP, max 30% capital, max 3 rebalances per day."
+6. The local Agent planner turns that sentence into a structured pool policy and execution path.
+7. The user authorizes one selected pool with hard limits: max capital, min range width, daily action count, strategy mode, and manual/autopilot mode.
+8. Agentic Wallet executes approve/deposit/authorize/proposal actions only after safety scan and user-controlled write mode.
+9. The Hook enforces those limits inside Uniswap v4 liquidity callbacks.
 
 The Agent does not get open-ended custody. It receives bounded authority over selected pools only, and the user's assets sit in Agentic Wallet first.
 
@@ -48,8 +49,9 @@ That split is intentional: the Agent can be smart offchain, but execution is con
 flowchart LR
   A["User OKX Wallet / exchange"] --> B["Agentic Wallet receive address"]
   B --> C["Agentic Wallet asset view"]
-  C --> D["Treasury Vault funding"]
-  E["AI strategy analyst"] --> F["LP Opportunity Finder"]
+  C --> D["Natural-language treasury intent"]
+  D --> E["Local Agent planner"]
+  E --> F["Structured LP policy"]
   F --> G["User authorizes pool policy"]
   G --> H["Agentic Wallet proposal or autopilot action"]
   H --> I["AgentTreasuryVault policy checks"]
@@ -68,8 +70,8 @@ flowchart LR
 - Hook-level LP guard: liquidity actions carrying Agent hook data must match an authorized pool policy, use a unique action id, respect capital caps, respect minimum range width, and consume the daily action quota.
 - Opportunity signal reporting: the signal reporter can publish risk scores and fee overrides for selected pools.
 - Dynamic fee support: swaps use a reported fee override or fall back to low/high risk fees.
-- OKX-style guided app: Chinese/English language switch, Agentic Wallet connect/disconnect menu, receive address copy, Agentic Wallet OKB/ERC20 asset display, asset picker with imported-token support, LP strategy selection, prepared approve/deposit/authorize/proposal/signal actions, safety scan, and proof log.
-- Agentic Wallet gateway: `npm run agentic:bridge` can run locally or on a server. It supports per-user email OTP login, isolated Agentic Wallet sessions, X Layer balance data, safety scans, and optional write mode. Write mode requires `AGENTIC_BRIDGE_WRITE=1`.
+- Conversational Agent app: Chinese/English language switch, natural-language treasury intent input, deterministic local Agent planner, structured LP policy card, execution path, live proof ledger, and advanced execution controls hidden by default.
+- Agentic Wallet gateway: `npm run agentic:bridge` can run locally or on a server. It supports per-user email OTP login, isolated Agentic Wallet sessions, X Layer balance data, `/agent/plan`, `/proof/live`, safety scans, and optional write mode. Write mode requires `AGENTIC_BRIDGE_WRITE=1`.
 - Foundry deployment scripts for demo tokens, Hook, Treasury Vault, pool creation/liquidity, swaps, and demo router.
 - Foundry tests covering manual liquidity, dynamic fee signals, authorized Agent LP actions, capital cap rejection, replay protection, narrow-range rejection, and daily action limits.
 
@@ -77,7 +79,7 @@ flowchart LR
 
 ```text
 xlayer-agentic-intent-hook/
-├── app/                         # React operator console
+├── app/                         # React conversational Agent console
 ├── src/
 │   ├── AgentTreasuryHook.sol     # Uniswap v4 Hook
 │   ├── AgentTreasuryVault.sol    # User-owned Agent LP treasury
@@ -95,7 +97,8 @@ xlayer-agentic-intent-hook/
 
 - `src/AgentTreasuryHook.sol` - Hook policy enforcement and dynamic fee signals.
 - `src/AgentTreasuryVault.sol` - user treasury, pool authorization, deposits, proposals, and daily action controls.
-- `app/src/App.tsx` - Agentic Wallet-only OKX-style product console.
+- `app/src/App.tsx` - conversational Agent treasury UI, plan card, proof ledger, and advanced execution controls.
+- `app/src/proof.ts` - public live proof data shown in the app.
 - `app/src/treasury.ts` - pool key, pool id, opportunity scoring, action id, and explorer helpers.
 - `scripts/agentic-wallet-bridge.mjs` - Agentic Wallet gateway for login, balances, tx-scan, and optional contract-call.
 - `test/AgentTreasuryHook.t.sol` - full local behavior tests.

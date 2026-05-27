@@ -1,19 +1,20 @@
 # Judge Guide
 
-AI Agent Treasury Hook is intended to be judged as an Agentic Wallet-native Uniswap v4 Hook project, not as a generic dashboard.
+AI Agent Treasury Hook is intended to be judged as a conversational Agentic Wallet-native Uniswap v4 Hook project, not as a generic dashboard.
 
 ## 60-Second Judge Path
 
-1. Open the app and connect OKX Agentic Wallet with email OTP.
-2. Confirm the app reads the Agentic Wallet X Layer address and assets.
-3. Inspect the deployed Hook, Treasury Vault, demo tokens, and PoolId in `deployment/xlayer-mainnet.review.json`.
-4. Verify the Hook address permission bits and deployed bytecode:
+1. Open the app and enter a natural-language treasury goal in the Agent chat.
+2. Confirm the Agent turns it into a structured LP plan with pool, capital cap, range width, daily actions, and Hook boundaries.
+3. Inspect the Live X Layer Proof section in the app.
+4. Inspect the deployed Hook, Treasury Vault, demo tokens, and PoolId in `deployment/xlayer-mainnet.review.json`.
+5. Verify the Hook address permission bits and deployed bytecode:
 
 ```bash
 npm run verify:live
 ```
 
-5. Follow the proof ledger:
+6. Follow the proof ledger:
    - Hook deploy tx,
    - Vault deploy tx,
    - Pool initialize tx,
@@ -24,7 +25,7 @@ npm run verify:live
    - Agent proposal tx,
    - Agent liquidity action tx.
 
-6. Confirm the Agentic Wallet proof:
+7. Confirm the Agentic Wallet proof:
 
 ```bash
 npm run agentic:bridge:local
