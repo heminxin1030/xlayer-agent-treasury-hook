@@ -44,6 +44,7 @@ import {
 } from "./treasury";
 
 type Config = {
+  gatewayUrl: string;
   token0: string;
   token1: string;
   hook: string;
@@ -117,7 +118,14 @@ type Menu = "wallet" | "asset" | "advanced" | null;
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const STORAGE_KEY = "agent-treasury-hook:v3";
 const LANGUAGE_KEY = "agent-treasury-hook:language";
-const BRIDGE_URL = "http://127.0.0.1:8789";
+const SESSION_KEY = "agent-treasury-hook:session";
+
+function defaultGatewayUrl() {
+  const fromQuery = new URLSearchParams(window.location.search).get("gateway");
+  if (fromQuery) return fromQuery;
+  if (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost") return "http://127.0.0.1:8789";
+  return "";
+}
 
 const COPY = {
   zh: {
@@ -139,7 +147,12 @@ const COPY = {
       copy: "复制收款地址",
       menu: "钱包菜单",
       okb: "OKB 余额",
-      bridge: "本地 bridge",
+      bridge: "Agent Gateway",
+      gateway: "Gateway URL",
+      email: "邮箱",
+      otp: "验证码",
+      sendOtp: "发送 OTP",
+      verifyOtp: "验证并连接",
     },
     strategy: {
       title: "选择 LP 机会",
@@ -193,7 +206,10 @@ const COPY = {
       connected: (address: string) => `Agentic Wallet 已连接：${address}`,
       disconnected: "已断开本地 Agentic Wallet 连接。",
       refreshed: "Agentic Wallet 资产已刷新。",
-      bridgeOff: "Agentic Wallet bridge 未运行。请先执行 npm run agentic:bridge。",
+      bridgeOff: "Agent Gateway 不可用。请配置线上 Gateway，或本地执行 npm run agentic:bridge。",
+      needGateway: "请先配置 Agent Gateway URL。",
+      otpSent: "OTP 已发送，请输入邮箱验证码。",
+      verified: "Agentic Wallet 已验证并连接。",
       needAgentic: "请先连接 Agentic Wallet。",
       needVault: "请先在高级信息里填入 Vault 地址。",
       needHook: "请先在高级信息里填入 Hook 地址。",
@@ -248,7 +264,12 @@ const COPY = {
       copy: "Copy receive address",
       menu: "Wallet menu",
       okb: "OKB balance",
-      bridge: "Local bridge",
+      bridge: "Agent Gateway",
+      gateway: "Gateway URL",
+      email: "Email",
+      otp: "OTP",
+      sendOtp: "Send OTP",
+      verifyOtp: "Verify and connect",
     },
     strategy: {
       title: "Choose LP Opportunity",
@@ -302,7 +323,10 @@ const COPY = {
       connected: (address: string) => `Agentic Wallet connected: ${address}`,
       disconnected: "Local Agentic Wallet connection cleared.",
       refreshed: "Agentic Wallet assets refreshed.",
-      bridgeOff: "Agentic Wallet bridge is not running. Start npm run agentic:bridge first.",
+      bridgeOff: "Agent Gateway is unavailable. Configure an online gateway, or run npm run agentic:bridge locally.",
+      needGateway: "Configure Agent Gateway URL first.",
+      otpSent: "OTP sent. Enter the email code to continue.",
+      verified: "Agentic Wallet verified and connected.",
       needAgentic: "Connect Agentic Wallet first.",
       needVault: "Set the Vault address in Advanced first.",
       needHook: "Set the Hook address in Advanced first.",
@@ -341,6 +365,7 @@ const COPY = {
 } as const;
 
 const initialConfig: Config = {
+  gatewayUrl: defaultGatewayUrl(),
   token0: DEFAULTS.token0,
   token1: DEFAULTS.token1,
   hook: DEFAULTS.hook,
@@ -382,6 +407,9 @@ export function App() {
   const [language, setLanguage] = useState<Language>(() => loadLanguage());
   const [config, setConfig] = useState<Config>(() => loadConfig());
   const [agentic, setAgentic] = useState<AgenticStatus>({ ok: false });
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY) || "");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [selectedId, setSelectedId] = useState("agent-demo-balanced");
   const [selectedAssetId, setSelectedAssetId] = useState("okb");
   const [amount, setAmount] = useState("0.001");
@@ -414,6 +442,7 @@ export function App() {
   const isAuthorized = Boolean(authorized[selected.id]);
   const scanDone = Boolean(scanState?.ok && scanState.action !== "block");
   const hasExecutionProof = Boolean(lastTx);
+  const gatewayUrl = config.gatewayUrl.trim().replace(/\/$/, "");
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
@@ -439,9 +468,64 @@ export function App() {
     setStatus(COPY[nextLanguage].ready);
   }
 
+  function gatewayEndpoint(path: string) {
+    return `${gatewayUrl}${path}`;
+  }
+
+  function sessionQuery() {
+    return sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  }
+
+  async function sendOtp() {
+    if (!gatewayUrl) {
+      setStatus(c.status.needGateway);
+      return;
+    }
+    const response = await fetch(gatewayEndpoint("/login"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: loginEmail }),
+    });
+    const payload = await response.json();
+    if (payload.sessionId) {
+      setSessionId(payload.sessionId);
+      localStorage.setItem(SESSION_KEY, payload.sessionId);
+    }
+    setStatus(response.ok ? c.status.otpSent : payload.error || c.status.bridgeOff);
+  }
+
+  async function verifyOtp() {
+    if (!gatewayUrl) {
+      setStatus(c.status.needGateway);
+      return;
+    }
+    const response = await fetch(gatewayEndpoint("/verify"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sessionId, otp }),
+    });
+    const payload = (await response.json()) as AgenticStatus & { sessionId?: string; error?: string };
+    if (payload.sessionId) {
+      setSessionId(payload.sessionId);
+      localStorage.setItem(SESSION_KEY, payload.sessionId);
+    }
+    const address = payload.address && isAddress(payload.address) ? getAddress(payload.address) : undefined;
+    const next = { ...payload, address };
+    setAgentic(next);
+    if (address) {
+      setConfig((current) => ({ ...current, agent: address }));
+      await refreshAssets(address, payload.sessionId ?? sessionId);
+    }
+    setStatus(response.ok && address ? c.status.verified : payload.error || c.status.bridgeOff);
+  }
+
   async function connectAgenticWallet() {
+    if (!gatewayUrl) {
+      setStatus(c.status.needGateway);
+      return;
+    }
     try {
-      const response = await fetch(`${BRIDGE_URL}/status`);
+      const response = await fetch(gatewayEndpoint(`/status${sessionQuery()}`));
       const payload = (await response.json()) as AgenticStatus;
       const address = payload.address && isAddress(payload.address) ? getAddress(payload.address) : undefined;
       const next = { ...payload, address };
@@ -460,6 +544,8 @@ export function App() {
 
   function disconnectAgenticWallet() {
     setAgentic({ ok: false });
+    setSessionId("");
+    localStorage.removeItem(SESSION_KEY);
     setBridgeTokens([]);
     setBalances({ okb: "0" });
     setPreparedAction(null);
@@ -468,7 +554,7 @@ export function App() {
     setStatus(c.status.disconnected);
   }
 
-  async function refreshAssets(target = agentic.address) {
+  async function refreshAssets(target = agentic.address, session = sessionId) {
     if (!target) {
       setStatus(c.status.needAgentic);
       return;
@@ -478,7 +564,8 @@ export function App() {
     next.okb = trimBalance(formatEther(nativeBalance));
 
     try {
-      const response = await fetch(`${BRIDGE_URL}/balance`);
+      const query = session ? `?sessionId=${encodeURIComponent(session)}` : "";
+      const response = await fetch(gatewayEndpoint(`/balance${query}`));
       const payload = (await response.json()) as BalancePayload;
       setBridgeTokens(payload.tokens ?? []);
       setTotalValueUsd(payload.totalValueUsd ?? null);
@@ -709,11 +796,16 @@ export function App() {
       return;
     }
     try {
-      const response = await fetch(`${BRIDGE_URL}/tx-scan`, {
+      if (!gatewayUrl) {
+        setStatus(c.status.needGateway);
+        return;
+      }
+      const response = await fetch(gatewayEndpoint("/tx-scan"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           from: agentic.address,
+          sessionId,
           to: preparedAction.target,
           data: preparedAction.calldata,
           value: preparedAction.value,
@@ -740,11 +832,16 @@ export function App() {
       return;
     }
     try {
-      const response = await fetch(`${BRIDGE_URL}/contract-call`, {
+      if (!gatewayUrl) {
+        setStatus(c.status.needGateway);
+        return;
+      }
+      const response = await fetch(gatewayEndpoint("/contract-call"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           from: agentic.address,
+          sessionId,
           to: preparedAction.target,
           data: preparedAction.calldata,
           value: preparedAction.value,
@@ -804,7 +901,7 @@ export function App() {
         <div className="rail-card">
           <span>{c.wallet.bridge}</span>
           <strong>{agentic.ok ? c.wallet.connected : c.wallet.disconnected}</strong>
-          <small>{BRIDGE_URL}</small>
+          <small>{gatewayUrl || c.status.needGateway}</small>
         </div>
       </aside>
 
@@ -865,10 +962,23 @@ export function App() {
               <p>{agentic.address ? c.status.connected(short(agentic.address)) : c.ready}</p>
             </div>
           </div>
+          <div className="gateway-grid">
+            <Field label={c.wallet.gateway}>
+              <input value={config.gatewayUrl} onChange={(event) => update("gatewayUrl", event.target.value)} placeholder="https://agent-gateway.example.com" />
+            </Field>
+            <Field label={c.wallet.email}>
+              <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@example.com" />
+            </Field>
+            <Field label={c.wallet.otp}>
+              <input value={otp} onChange={(event) => setOtp(event.target.value)} placeholder="123456" />
+            </Field>
+          </div>
           <div className="quick-actions">
             <button className="primary" onClick={connectAgenticWallet}>
               <Bot size={18} /> {c.wallet.connect}
             </button>
+            <button onClick={sendOtp}>{c.wallet.sendOtp}</button>
+            <button onClick={verifyOtp}>{c.wallet.verifyOtp}</button>
             <button onClick={() => refreshAssets()}>
               <RefreshCcw size={18} /> {c.wallet.refresh}
             </button>

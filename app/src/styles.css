@@ -384,13 +384,18 @@ h2 {
 .strategy-grid,
 .permission-grid,
 .advanced-grid,
-.proof-grid {
+.proof-grid,
+.gateway-grid {
   display: grid;
   gap: 12px;
 }
 
 .strategy-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gateway-grid {
+  grid-template-columns: minmax(260px, 1.4fr) minmax(180px, 0.8fr) minmax(140px, 0.6fr);
 }
 
 .strategy-card {
@@ -694,6 +699,7 @@ h2 {
   .fund-grid,
   .advanced-grid,
   .proof-grid,
+  .gateway-grid,
   .receive-box,
   .command-box {
     grid-template-columns: 1fr;

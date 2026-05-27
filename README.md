@@ -61,7 +61,7 @@ flowchart LR
 - Opportunity signal reporting: the signal reporter can publish risk scores and fee overrides for selected pools.
 - Dynamic fee support: swaps use a reported fee override or fall back to low/high risk fees.
 - OKX-style guided app: Chinese/English language switch, Agentic Wallet connect/disconnect menu, receive address copy, Agentic Wallet OKB/ERC20 asset display, asset picker with imported-token support, LP strategy selection, prepared approve/deposit/authorize/proposal/signal actions, safety scan, and proof log.
-- Agentic Wallet bridge: `npm run agentic:bridge` exposes local wallet status, X Layer address, and balance data. It is read/scan-only by default; write mode requires `AGENTIC_BRIDGE_WRITE=1`.
+- Agentic Wallet gateway: `npm run agentic:bridge` can run locally or on a server. It supports per-user email OTP login, isolated Agentic Wallet sessions, X Layer balance data, safety scans, and optional write mode. Write mode requires `AGENTIC_BRIDGE_WRITE=1`.
 - Foundry deployment scripts for demo tokens, Hook, Treasury Vault, pool creation/liquidity, swaps, and demo router.
 - Foundry tests covering manual liquidity, dynamic fee signals, authorized Agent LP actions, capital cap rejection, replay protection, narrow-range rejection, and daily action limits.
 
@@ -76,7 +76,7 @@ xlayer-agentic-intent-hook/
 │   └── MockAgentToken.sol        # Demo ERC-20 pair
 ├── script/                      # Foundry deployment and operation scripts
 ├── scripts/
-│   └── agentic-wallet-bridge.mjs # Local Agentic Wallet status/balance/scan bridge
+│   └── agentic-wallet-bridge.mjs # Agentic Wallet gateway
 ├── test/                        # Foundry tests
 ├── deployment/                  # Local review manifest
 ├── docs/                        # Chinese review notes
@@ -89,7 +89,7 @@ xlayer-agentic-intent-hook/
 - `src/AgentTreasuryVault.sol` - user treasury, pool authorization, deposits, proposals, and daily action controls.
 - `app/src/App.tsx` - Agentic Wallet-only OKX-style product console.
 - `app/src/treasury.ts` - pool key, pool id, opportunity scoring, action id, and explorer helpers.
-- `scripts/agentic-wallet-bridge.mjs` - local bridge to Agentic Wallet CLI status, balances, tx-scan, and optional contract-call.
+- `scripts/agentic-wallet-bridge.mjs` - Agentic Wallet gateway for login, balances, tx-scan, and optional contract-call.
 - `test/AgentTreasuryHook.t.sol` - full local behavior tests.
 - `script/00_DeployHook.s.sol` - mines and deploys the permission-encoded Hook address.
 - `script/03_DeployAgentTreasury.s.sol` - deploys the user-owned Treasury Vault.
@@ -127,19 +127,21 @@ Run the app:
 npm run dev
 ```
 
-Start the Agentic Wallet bridge:
+Start the Agentic Wallet gateway locally:
 
 ```bash
 npm run agentic:bridge
 ```
 
-Open the local Vite URL. The app does not connect to an injected browser wallet. The bridge listens on `127.0.0.1:8789` and shows the Agentic Wallet address and funds.
+Open the local Vite URL. The app does not connect to an injected browser wallet. The gateway listens on `127.0.0.1:8789`, lets a user log in with Agentic Wallet email OTP, and shows that user's X Layer funds.
 
 Write mode is intentionally off by default. For real contract calls after owner approval:
 
 ```bash
 AGENTIC_BRIDGE_WRITE=1 npm run agentic:bridge
 ```
+
+For public testing, deploy the same gateway behind HTTPS and set the app's Gateway URL field to that endpoint. Each user receives an isolated session id, so the server does not share one Agentic Wallet across users.
 
 ## X Layer Deployment Runbook
 
@@ -188,7 +190,7 @@ Then use the app to:
 ## Security Boundaries
 
 - The app never connects to a browser injected wallet.
-- The Agentic Wallet bridge is read/scan-only by default and never signs or broadcasts unless `AGENTIC_BRIDGE_WRITE=1` is explicitly set.
+- The Agentic Wallet gateway uses per-user sessions and is read/scan-only by default. It never signs or broadcasts unless `AGENTIC_BRIDGE_WRITE=1` is explicitly set.
 - The app does not ask for seed phrases or private keys.
 - Use Foundry keystore `--account`; avoid raw private keys in shell history.
 - Real Agentic Wallet `contract-call` runs must follow the safety scan and confirmation flow first.

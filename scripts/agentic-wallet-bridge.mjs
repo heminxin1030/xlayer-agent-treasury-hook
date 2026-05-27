@@ -1,10 +1,16 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.AGENTIC_BRIDGE_PORT || 8789);
 const writeEnabled = process.env.AGENTIC_BRIDGE_WRITE === "1";
+const allowDefaultHome = process.env.AGENTIC_GATEWAY_ALLOW_DEFAULT_HOME === "1";
+const dataDir = process.env.AGENTIC_GATEWAY_DATA_DIR || path.join(os.homedir(), ".agent-treasury-gateway");
 const allowedOrigins = new Set(
   (process.env.AGENTIC_BRIDGE_ALLOWED_ORIGINS ||
     "http://127.0.0.1:5173,http://localhost:5173,https://heminxin1030.github.io")
@@ -18,6 +24,7 @@ async function runOnchainos(args, options = {}) {
     const { stdout, stderr } = await execFileAsync("onchainos", args, {
       timeout: options.timeout ?? 12000,
       maxBuffer: 1024 * 1024,
+      env: options.home ? { ...process.env, HOME: options.home } : process.env,
     });
     return { ok: true, stdout, stderr, exitCode: 0 };
   } catch (error) {
@@ -35,6 +42,7 @@ function runCommand(command, args, options = {}) {
   return execFileAsync(command, args, {
     timeout: options.timeout ?? 12000,
     maxBuffer: 1024 * 1024,
+    env: options.home ? { ...process.env, HOME: options.home } : process.env,
   });
 }
 
@@ -129,6 +137,17 @@ async function readBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function sessionIdFrom(value) {
+  return typeof value === "string" && /^[a-f0-9-]{36}$/.test(value) ? value : "";
+}
+
+async function homeForSession(sessionId) {
+  if (!sessionId) return undefined;
+  const home = path.join(dataDir, "sessions", sessionId);
+  await mkdir(home, { recursive: true, mode: 0o700 });
+  return home;
+}
+
 function validCallPayload(payload) {
   return (
     typeof payload?.from === "string" &&
@@ -140,16 +159,20 @@ function validCallPayload(payload) {
   );
 }
 
-async function readStatus() {
+async function readStatus(sessionId = "") {
+  if (!sessionId && !allowDefaultHome) {
+    return { ok: false, loggedIn: false, error: "session_required" };
+  }
+  const home = await homeForSession(sessionId);
   try {
-    const status = await runCommand("onchainos", ["wallet", "status"]);
-    const addresses = await runCommand("onchainos", ["wallet", "addresses", "--chain", "xlayer"]);
+    const status = await runCommand("onchainos", ["wallet", "status"], { home });
+    const addresses = await runCommand("onchainos", ["wallet", "addresses", "--chain", "xlayer"], { home });
     const address = addresses.stdout.match(/0x[a-fA-F0-9]{40}/)?.[0] ?? null;
+    const parsedStatus = parseJsonLike(status.stdout);
     return {
       ok: true,
-      status: status.stdout,
       address,
-      addresses: addresses.stdout,
+      loggedIn: Boolean(parsedStatus?.data?.loggedIn ?? address),
     };
   } catch (error) {
     return {
@@ -159,9 +182,13 @@ async function readStatus() {
   }
 }
 
-async function readBalance() {
-  const status = await readStatus();
-  const balance = await runOnchainos(["wallet", "balance", "--chain", "xlayer"], { timeout: 20000 });
+async function readBalance(sessionId = "") {
+  if (!sessionId && !allowDefaultHome) {
+    return { ok: false, error: "session_required", tokens: [] };
+  }
+  const home = await homeForSession(sessionId);
+  const status = await readStatus(sessionId);
+  const balance = await runOnchainos(["wallet", "balance", "--chain", "xlayer"], { timeout: 20000, home });
   if (!balance.ok) {
     return {
       ok: false,
@@ -179,11 +206,11 @@ async function readBalance() {
     address: status.address,
     tokens,
     totalValueUsd: parsed?.data?.totalValueUsd ?? parsed?.totalValueUsd ?? null,
-    raw: balance.stdout,
   };
 }
 
 const server = http.createServer(async (req, res) => {
+  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
   const origin = req.headers.origin;
   if (typeof origin === "string" && allowedOrigins.has(origin)) {
     res.setHeader("access-control-allow-origin", origin);
@@ -198,21 +225,73 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === "/status") {
-    const payload = await readStatus();
+  if (requestUrl.pathname === "/health") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true, writeEnabled, mode: "agentic-gateway" }));
+    return;
+  }
+
+  if (requestUrl.pathname === "/login" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const email = typeof payload.email === "string" ? payload.email.trim() : "";
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "invalid_email" }));
+        return;
+      }
+      const sessionId = randomUUID();
+      const home = await homeForSession(sessionId);
+      const result = await runOnchainos(["wallet", "login", email, "--locale", "zh_CN", "--chain", "xlayer"], {
+        timeout: 30000,
+        home,
+      });
+      res.writeHead(result.ok ? 200 : 502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: result.ok, sessionId, stdout: result.stdout, stderr: result.stderr, error: result.error }));
+    } catch (error) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/verify" && req.method === "POST") {
+    try {
+      const payload = await readBody(req);
+      const sessionId = sessionIdFrom(payload.sessionId);
+      const otp = typeof payload.otp === "string" ? payload.otp.trim() : "";
+      if (!sessionId || !/^[0-9A-Za-z-]{4,16}$/.test(otp)) {
+        res.writeHead(400, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: false, error: "invalid_session_or_otp" }));
+        return;
+      }
+      const home = await homeForSession(sessionId);
+      const verified = await runOnchainos(["wallet", "verify", otp, "--chain", "xlayer"], { timeout: 30000, home });
+      const status = verified.ok ? await readStatus(sessionId) : {};
+      res.writeHead(verified.ok ? 200 : 502, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: verified.ok, sessionId, ...status, stdout: verified.stdout, stderr: verified.stderr, error: verified.error }));
+    } catch (error) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (requestUrl.pathname === "/status") {
+    const payload = await readStatus(sessionIdFrom(requestUrl.searchParams.get("sessionId")));
     res.writeHead(payload.ok ? 200 : 503, { "content-type": "application/json" });
     res.end(JSON.stringify(payload));
     return;
   }
 
-  if (req.url === "/balance") {
-    const payload = await readBalance();
+  if (requestUrl.pathname === "/balance") {
+    const payload = await readBalance(sessionIdFrom(requestUrl.searchParams.get("sessionId")));
     res.writeHead(payload.ok ? 200 : 503, { "content-type": "application/json" });
     res.end(JSON.stringify(payload));
     return;
   }
 
-  if (req.url === "/tx-scan" && req.method === "POST") {
+  if (requestUrl.pathname === "/tx-scan" && req.method === "POST") {
     try {
       const payload = await readBody(req);
       if (!validCallPayload(payload)) {
@@ -220,6 +299,7 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ ok: false, error: "invalid_payload" }));
         return;
       }
+      const home = await homeForSession(sessionIdFrom(payload.sessionId));
       const result = await runOnchainos(
         [
           "security",
@@ -235,7 +315,7 @@ const server = http.createServer(async (req, res) => {
           "--value",
           String(payload.value ?? "0"),
         ],
-        { timeout: 20000 },
+        { timeout: 20000, home },
       );
       const summary = summarizeScan(result.stdout, result.stderr);
       res.writeHead(result.ok ? 200 : 502, { "content-type": "application/json" });
@@ -247,7 +327,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.url === "/contract-call" && req.method === "POST") {
+  if (requestUrl.pathname === "/contract-call" && req.method === "POST") {
     try {
       const payload = await readBody(req);
       if (!validCallPayload(payload)) {
@@ -266,6 +346,7 @@ const server = http.createServer(async (req, res) => {
         );
         return;
       }
+      const home = await homeForSession(sessionIdFrom(payload.sessionId));
       const result = await runOnchainos(
         [
           "wallet",
@@ -281,7 +362,7 @@ const server = http.createServer(async (req, res) => {
           "--amt",
           String(payload.value ?? "0"),
         ],
-        { timeout: 60000 },
+        { timeout: 60000, home },
       );
       const txHash = parseTxHash(result.stdout);
       const parsed = parseJsonLike(result.stdout);
@@ -310,5 +391,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(port, "127.0.0.1", () => {
   const mode = writeEnabled ? "write-enabled" : "read/scan-only";
-  console.log(`Agentic Wallet bridge (${mode}) listening on http://127.0.0.1:${port}`);
+  console.log(`Agentic Wallet gateway (${mode}) listening on http://127.0.0.1:${port}`);
 });
