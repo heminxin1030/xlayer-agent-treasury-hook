@@ -5,6 +5,13 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const port = Number(process.env.AGENTIC_BRIDGE_PORT || 8789);
 const writeEnabled = process.env.AGENTIC_BRIDGE_WRITE === "1";
+const allowedOrigins = new Set(
+  (process.env.AGENTIC_BRIDGE_ALLOWED_ORIGINS ||
+    "http://127.0.0.1:5173,http://localhost:5173,https://heminxin1030.github.io")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
 
 async function runOnchainos(args, options = {}) {
   try {
@@ -177,9 +184,14 @@ async function readBalance() {
 }
 
 const server = http.createServer(async (req, res) => {
-  res.setHeader("access-control-allow-origin", "http://127.0.0.1:5173");
+  const origin = req.headers.origin;
+  if (typeof origin === "string" && allowedOrigins.has(origin)) {
+    res.setHeader("access-control-allow-origin", origin);
+  }
+  res.setHeader("vary", "Origin");
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type");
+  res.setHeader("access-control-allow-private-network", "true");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204).end();
