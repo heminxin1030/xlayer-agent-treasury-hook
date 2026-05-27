@@ -8,13 +8,14 @@ This version is ready for GitHub testing. X Layer deployment, demo video recordi
 
 Most v4 hackathon entries improve a swap path: dynamic fee, limit order, TWAP, or routing. This project is different. It creates an Agent-native treasury flow:
 
-1. The user connects only OKX Agentic Wallet through the local bridge.
-2. The user funds the Agentic Wallet receive address from OKX Wallet, an exchange, or another wallet.
-3. The app displays Agentic Wallet assets on X Layer so the user can decide what can be used.
-4. The Agent ranks LP opportunities by fee APR, TVL, volume, volatility, and concentration risk.
-5. The user authorizes one selected pool with hard limits: max capital, min range width, daily action count, strategy mode, and manual/autopilot mode.
-6. Agentic Wallet executes approve/deposit/authorize/proposal actions only after local safety scan and user-controlled write mode.
-7. The Hook enforces those limits inside Uniswap v4 liquidity callbacks.
+1. The user signs in to OKX Agentic Wallet with email OTP through the Agent Gateway.
+2. The gateway calls OKX OnchainOS / Agentic Wallet services; it is not a separate wallet server and never holds private keys.
+3. The user funds the Agentic Wallet receive address from OKX Wallet, an exchange, or another wallet.
+4. The app displays Agentic Wallet assets on X Layer so the user can decide what can be used.
+5. The Agent ranks LP opportunities by fee APR, TVL, volume, volatility, and concentration risk.
+6. The user authorizes one selected pool with hard limits: max capital, min range width, daily action count, strategy mode, and manual/autopilot mode.
+7. Agentic Wallet executes approve/deposit/authorize/proposal actions only after safety scan and user-controlled write mode.
+8. The Hook enforces those limits inside Uniswap v4 liquidity callbacks.
 
 The Agent does not get open-ended custody. It receives bounded authority over selected pools only, and the user's assets sit in Agentic Wallet first.
 
@@ -141,7 +142,7 @@ Write mode is intentionally off by default. For real contract calls after owner 
 AGENTIC_BRIDGE_WRITE=1 npm run agentic:bridge
 ```
 
-For public testing, deploy the same gateway behind HTTPS and set the app's Gateway URL field to that endpoint. Each user receives an isolated session id, so the server does not share one Agentic Wallet across users.
+For public testing, deploy the same gateway behind HTTPS and configure the frontend with that endpoint. The normal user flow is only email -> OTP -> connected wallet; the gateway URL is a deployment detail. Each user receives an isolated session id, so the server does not share one Agentic Wallet across users.
 
 ## X Layer Deployment Runbook
 
@@ -175,7 +176,7 @@ forge script script/01_CreatePoolAndAddLiquidity.s.sol --rpc-url "$X_LAYER_RPC_U
 
 Then use the app to:
 
-- connect Agentic Wallet through the bridge,
+- sign in to Agentic Wallet with email OTP,
 - copy the Agentic Wallet receive address and fund it with tiny test assets,
 - verify the Agentic Wallet funds panel,
 - choose a usable Agentic Wallet asset from the asset menu,
@@ -190,7 +191,7 @@ Then use the app to:
 ## Security Boundaries
 
 - The app never connects to a browser injected wallet.
-- The Agentic Wallet gateway uses per-user sessions and is read/scan-only by default. It never signs or broadcasts unless `AGENTIC_BRIDGE_WRITE=1` is explicitly set.
+- The Agentic Wallet gateway calls OKX's Agentic Wallet service, uses per-user sessions, and is read/scan-only by default. It never signs or broadcasts unless `AGENTIC_BRIDGE_WRITE=1` is explicitly set.
 - The app does not ask for seed phrases or private keys.
 - Use Foundry keystore `--account`; avoid raw private keys in shell history.
 - Real Agentic Wallet `contract-call` runs must follow the safety scan and confirmation flow first.

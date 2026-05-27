@@ -385,7 +385,7 @@ h2 {
 .permission-grid,
 .advanced-grid,
 .proof-grid,
-.gateway-grid {
+.login-grid {
   display: grid;
   gap: 12px;
 }
@@ -394,8 +394,21 @@ h2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.gateway-grid {
-  grid-template-columns: minmax(260px, 1.4fr) minmax(180px, 0.8fr) minmax(140px, 0.6fr);
+.login-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(140px, 0.55fr) minmax(220px, 0.9fr);
+  align-items: end;
+}
+
+.login-hint {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfcfe;
+  color: var(--muted);
+  padding: 9px 11px;
+  line-height: 1.35;
 }
 
 .strategy-card {
@@ -699,7 +712,7 @@ h2 {
   .fund-grid,
   .advanced-grid,
   .proof-grid,
-  .gateway-grid,
+  .login-grid,
   .receive-box,
   .command-box {
     grid-template-columns: 1fr;

@@ -133,7 +133,7 @@ const COPY = {
     brandSub: "X Layer Hook",
     language: "语言",
     heroTitle: "AI Agent Treasury Hook",
-    heroCopy: "只连接 Agentic Wallet：外部钱包只负责把资产转入 Agentic Wallet，之后由 Agentic Wallet 在用户授权和 Hook 限制内管理 LP。",
+    heroCopy: "使用 OKX Agentic Wallet 登录：邮箱验证后自动恢复 Agent 钱包，由它在用户授权和 Hook 限制内管理 LP。",
     progressTitle: "流程进度",
     steps: ["Agentic Wallet", "资产", "策略", "权限", "安全扫描", "执行"],
     ready: "下一步：连接 Agentic Wallet，读取它在 X Layer 上的资产。",
@@ -153,6 +153,7 @@ const COPY = {
       otp: "验证码",
       sendOtp: "发送 OTP",
       verifyOtp: "验证并连接",
+      loginHint: "输入邮箱，验证码验证后即可连接你的 Agentic Wallet。",
     },
     strategy: {
       title: "选择 LP 机会",
@@ -207,7 +208,7 @@ const COPY = {
       disconnected: "已断开本地 Agentic Wallet 连接。",
       refreshed: "Agentic Wallet 资产已刷新。",
       bridgeOff: "Agent Gateway 不可用。请配置线上 Gateway，或本地执行 npm run agentic:bridge。",
-      needGateway: "请先配置 Agent Gateway URL。",
+      needGateway: "当前页面未配置线上 Agent Gateway。请在高级信息中填入部署好的 Gateway 地址。",
       otpSent: "OTP 已发送，请输入邮箱验证码。",
       verified: "Agentic Wallet 已验证并连接。",
       needAgentic: "请先连接 Agentic Wallet。",
@@ -250,7 +251,7 @@ const COPY = {
     brandSub: "X Layer Hook",
     language: "Language",
     heroTitle: "AI Agent Treasury Hook",
-    heroCopy: "Agentic Wallet is the only connected execution wallet. External wallets only fund it; then Agentic Wallet manages LP under user authorization and Hook limits.",
+    heroCopy: "Sign in with OKX Agentic Wallet. After email OTP verification, the Agent wallet is restored and can manage LP only inside user authorization and Hook limits.",
     progressTitle: "Progress",
     steps: ["Agentic Wallet", "Assets", "Strategy", "Permission", "Scan", "Execute"],
     ready: "Next: connect Agentic Wallet and load its X Layer assets.",
@@ -270,6 +271,7 @@ const COPY = {
       otp: "OTP",
       sendOtp: "Send OTP",
       verifyOtp: "Verify and connect",
+      loginHint: "Enter email, verify OTP, and connect your Agentic Wallet.",
     },
     strategy: {
       title: "Choose LP Opportunity",
@@ -324,7 +326,7 @@ const COPY = {
       disconnected: "Local Agentic Wallet connection cleared.",
       refreshed: "Agentic Wallet assets refreshed.",
       bridgeOff: "Agent Gateway is unavailable. Configure an online gateway, or run npm run agentic:bridge locally.",
-      needGateway: "Configure Agent Gateway URL first.",
+      needGateway: "No online Agent Gateway is configured. Set the deployed Gateway URL in Advanced.",
       otpSent: "OTP sent. Enter the email code to continue.",
       verified: "Agentic Wallet verified and connected.",
       needAgentic: "Connect Agentic Wallet first.",
@@ -962,23 +964,21 @@ export function App() {
               <p>{agentic.address ? c.status.connected(short(agentic.address)) : c.ready}</p>
             </div>
           </div>
-          <div className="gateway-grid">
-            <Field label={c.wallet.gateway}>
-              <input value={config.gatewayUrl} onChange={(event) => update("gatewayUrl", event.target.value)} placeholder="https://agent-gateway.example.com" />
-            </Field>
+          <div className="login-grid">
             <Field label={c.wallet.email}>
               <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@example.com" />
             </Field>
             <Field label={c.wallet.otp}>
               <input value={otp} onChange={(event) => setOtp(event.target.value)} placeholder="123456" />
             </Field>
+            <div className="login-hint">{c.wallet.loginHint}</div>
           </div>
           <div className="quick-actions">
-            <button className="primary" onClick={connectAgenticWallet}>
-              <Bot size={18} /> {c.wallet.connect}
+            <button className="primary" onClick={sendOtp}>{c.wallet.sendOtp}</button>
+            <button onClick={verifyOtp}>
+              <Bot size={18} /> {c.wallet.verifyOtp}
             </button>
-            <button onClick={sendOtp}>{c.wallet.sendOtp}</button>
-            <button onClick={verifyOtp}>{c.wallet.verifyOtp}</button>
+            <button onClick={connectAgenticWallet}>{c.wallet.connect}</button>
             <button onClick={() => refreshAssets()}>
               <RefreshCcw size={18} /> {c.wallet.refresh}
             </button>
@@ -1131,6 +1131,9 @@ export function App() {
             <div className="advanced-panel">
               <p>{c.advanced.subtitle}</p>
               <div className="advanced-grid">
+                <Field label={c.wallet.gateway}>
+                  <input value={config.gatewayUrl} onChange={(event) => update("gatewayUrl", event.target.value)} placeholder="https://agent-gateway.example.com" />
+                </Field>
                 <Field label={c.advanced.vault}>
                   <input value={config.vault} onChange={(event) => update("vault", event.target.value)} />
                 </Field>
