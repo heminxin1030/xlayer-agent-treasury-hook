@@ -4,12 +4,15 @@ pragma solidity ^0.8.26;
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {CurrencyLibrary, Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {LiquidityAmounts} from "@uniswap/v4-core/test/utils/LiquidityAmounts.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 import {BaseScript} from "./base/BaseScript.sol";
 import {LiquidityHelpers} from "./base/LiquidityHelpers.sol";
+
+import {AgentTreasuryHook} from "../src/AgentTreasuryHook.sol";
 
 contract AddLiquidityScript is BaseScript, LiquidityHelpers {
     using CurrencyLibrary for Currency;
@@ -19,7 +22,7 @@ contract AddLiquidityScript is BaseScript, LiquidityHelpers {
     // --- Configure These ---
     /////////////////////////////////////
 
-    uint24 lpFee = 3000; // 0.30%
+    uint24 lpFee = LPFeeLibrary.DYNAMIC_FEE_FLAG;
     int24 tickSpacing = 60;
 
     // --- liquidity position configuration --- //
@@ -33,13 +36,9 @@ contract AddLiquidityScript is BaseScript, LiquidityHelpers {
 
     function run() external {
         PoolKey memory poolKey = PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: lpFee,
-            tickSpacing: tickSpacing,
-            hooks: hookContract
+            currency0: currency0, currency1: currency1, fee: lpFee, tickSpacing: tickSpacing, hooks: hookContract
         });
-        bytes memory hookData = new bytes(0);
+        bytes memory hookData = _agentTreasuryHookData();
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(poolKey.toId());
 
@@ -82,5 +81,21 @@ contract AddLiquidityScript is BaseScript, LiquidityHelpers {
         // Add liquidity to existing pool
         positionManager.multicall{value: valueToPass}(params);
         vm.stopBroadcast();
+    }
+
+    function _agentTreasuryHookData() internal view returns (bytes memory) {
+        address vault = vm.envOr("VAULT_ADDRESS", address(0));
+        if (vault == address(0)) {
+            return new bytes(0);
+        }
+
+        uint256 capitalBps = vm.envOr("CAPITAL_BPS", uint256(1000));
+        require(capitalBps <= type(uint16).max, "CAPITAL_BPS too large");
+
+        bytes32 actionId =
+            vm.envOr("ACTION_ID", keccak256(abi.encodePacked(block.chainid, deployerAddress, block.timestamp)));
+        return abi.encode(
+            AgentTreasuryHook.TreasuryHookData({vault: vault, actionId: actionId, capitalBps: uint16(capitalBps)})
+        );
     }
 }

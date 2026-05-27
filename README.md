@@ -1,183 +1,212 @@
-# Uniswap v4 Hook Template
+# AI Agent Treasury Hook
 
-**A template for writing Uniswap v4 Hooks 🦄**
+AI Agent Treasury Hook is an X Layer + Uniswap v4 project where a user funds an OKX Agentic Wallet, the Agentic Wallet manages treasury assets, and a Hook enforces the user's risk limits whenever liquidity is added, removed, or rebalanced.
 
-### Get Started
+This version is ready for GitHub testing. X Layer deployment, demo video recording, and hackathon submission still require owner approval before final submission.
 
-This template provides a starting point for writing Uniswap v4 Hooks, including a simple example and preconfigured test environment. Start by creating a new repository using the "Use this template" button at the top right of this page. Alternatively you can also click this link:
+## Why This Hook Exists
 
-[![Use this Template](https://img.shields.io/badge/Use%20this%20Template-101010?style=for-the-badge&logo=github)](https://github.com/uniswapfoundation/v4-template/generate)
+Most v4 hackathon entries improve a swap path: dynamic fee, limit order, TWAP, or routing. This project is different. It creates an Agent-native treasury flow:
 
-1. The example hook [Counter.sol](src/Counter.sol) demonstrates the `beforeSwap()` and `afterSwap()` hooks
-2. The test template [Counter.t.sol](test/Counter.t.sol) preconfigures the v4 pool manager, test tokens, and test liquidity.
+1. The user connects only OKX Agentic Wallet through the local bridge.
+2. The user funds the Agentic Wallet receive address from OKX Wallet, an exchange, or another wallet.
+3. The app displays Agentic Wallet assets on X Layer so the user can decide what can be used.
+4. The Agent ranks LP opportunities by fee APR, TVL, volume, volatility, and concentration risk.
+5. The user authorizes one selected pool with hard limits: max capital, min range width, daily action count, strategy mode, and manual/autopilot mode.
+6. Agentic Wallet executes approve/deposit/authorize/proposal actions only after local safety scan and user-controlled write mode.
+7. The Hook enforces those limits inside Uniswap v4 liquidity callbacks.
 
-<details>
-<summary>Updating to v4-template:latest</summary>
+The Agent does not get open-ended custody. It receives bounded authority over selected pools only, and the user's assets sit in Agentic Wallet first.
 
-This template is actively maintained -- you can update the v4 dependencies, scripts, and helpers:
+## Agent Model And Hook Strategy
+
+The MVP does not require an LLM to move money. The LLM is an offchain strategy analyst: it explains opportunities, ranks candidate pools, and writes proposal rationales. The money-moving logic is deterministic.
+
+The Hook strategy is not "AI says yes." It is a hard onchain rule system:
+
+- pool allowlist by `poolId`,
+- max capital basis points,
+- minimum LP range width,
+- max daily actions,
+- unique `actionId` replay protection,
+- manual/autopilot mode from the Vault policy,
+- dynamic fee signal from the authorized reporter.
+
+That split is intentional: the Agent can be smart offchain, but execution is constrained onchain.
+
+## Product Flow
+
+```mermaid
+flowchart LR
+  A["User OKX Wallet / exchange"] --> B["Agentic Wallet receive address"]
+  B --> C["Agentic Wallet asset view"]
+  C --> D["Treasury Vault funding"]
+  E["AI strategy analyst"] --> F["LP Opportunity Finder"]
+  F --> G["User authorizes pool policy"]
+  G --> H["Agentic Wallet proposal or autopilot action"]
+  H --> I["AgentTreasuryVault policy checks"]
+  I --> J["Uniswap v4 PositionManager"]
+  J --> K["AgentTreasuryHook callbacks"]
+  K --> L{"Policy valid?"}
+  L -->|yes| M["Liquidity action allowed"]
+  L -->|no| N["Action reverted"]
+  K --> O["Dynamic fee signal for swaps"]
+```
+
+## What Is Implemented
+
+- `AgentTreasuryHook`: Uniswap v4 Hook with `afterInitialize`, `beforeAddLiquidity`, `beforeRemoveLiquidity`, `beforeSwap`, and `afterSwap`.
+- `AgentTreasuryVault`: user-owned vault that stores pool policies, deposits, withdrawals, proposals, daily action limits, and allowed execution targets.
+- Hook-level LP guard: liquidity actions carrying Agent hook data must match an authorized pool policy, use a unique action id, respect capital caps, respect minimum range width, and consume the daily action quota.
+- Opportunity signal reporting: the signal reporter can publish risk scores and fee overrides for selected pools.
+- Dynamic fee support: swaps use a reported fee override or fall back to low/high risk fees.
+- OKX-style guided app: Chinese/English language switch, Agentic Wallet connect/disconnect menu, receive address copy, Agentic Wallet OKB/ERC20 asset display, asset picker with imported-token support, LP strategy selection, prepared approve/deposit/authorize/proposal/signal actions, safety scan, and proof log.
+- Agentic Wallet bridge: `npm run agentic:bridge` exposes local wallet status, X Layer address, and balance data. It is read/scan-only by default; write mode requires `AGENTIC_BRIDGE_WRITE=1`.
+- Foundry deployment scripts for demo tokens, Hook, Treasury Vault, pool creation/liquidity, swaps, and demo router.
+- Foundry tests covering manual liquidity, dynamic fee signals, authorized Agent LP actions, capital cap rejection, replay protection, narrow-range rejection, and daily action limits.
+
+## Repository Structure
+
+```text
+xlayer-agentic-intent-hook/
+├── app/                         # React operator console
+├── src/
+│   ├── AgentTreasuryHook.sol     # Uniswap v4 Hook
+│   ├── AgentTreasuryVault.sol    # User-owned Agent LP treasury
+│   └── MockAgentToken.sol        # Demo ERC-20 pair
+├── script/                      # Foundry deployment and operation scripts
+├── scripts/
+│   └── agentic-wallet-bridge.mjs # Local Agentic Wallet status/balance/scan bridge
+├── test/                        # Foundry tests
+├── deployment/                  # Local review manifest
+├── docs/                        # Chinese review notes
+└── SUBMISSION.md                # Hackathon submission draft
+```
+
+## Core Files
+
+- `src/AgentTreasuryHook.sol` - Hook policy enforcement and dynamic fee signals.
+- `src/AgentTreasuryVault.sol` - user treasury, pool authorization, deposits, proposals, and daily action controls.
+- `app/src/App.tsx` - Agentic Wallet-only OKX-style product console.
+- `app/src/treasury.ts` - pool key, pool id, opportunity scoring, action id, and explorer helpers.
+- `scripts/agentic-wallet-bridge.mjs` - local bridge to Agentic Wallet CLI status, balances, tx-scan, and optional contract-call.
+- `test/AgentTreasuryHook.t.sol` - full local behavior tests.
+- `script/00_DeployHook.s.sol` - mines and deploys the permission-encoded Hook address.
+- `script/03_DeployAgentTreasury.s.sol` - deploys the user-owned Treasury Vault.
+
+## X Layer Configuration
+
+- Chain ID: `196`
+- RPC: `https://rpc.xlayer.tech` or `https://xlayerrpc.okx.com`
+- Explorer: `https://www.okx.com/web3/explorer/xlayer`
+- Native gas token: `OKB`
+- PoolManager: `0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32`
+- PositionManager: `0xcF1EAFC6928dC385A342E7C6491d371d2871458b`
+- Permit2: `0x000000000022D473030F116dDEE9F6B43aC78BA3`
+
+## Local Verification
 
 ```bash
-git remote add template https://github.com/uniswapfoundation/v4-template
-git fetch template
-git merge template/main <BRANCH> --allow-unrelated-histories
-```
-
-</details>
-
-### Requirements
-
-This template is designed to work with Foundry (stable). If you are using Foundry Nightly, you may encounter compatibility issues. You can update your Foundry installation to the latest stable version by running:
-
-```
-foundryup
-```
-
-To set up the project, run the following commands in your terminal to install dependencies and run the tests:
-
-```
-forge install
+npm install
+npm run typecheck
+npm run build
 forge test
 ```
 
-### Local Development
+Expected:
 
-Other than writing unit tests (recommended!), you can only deploy & test hooks on [anvil](https://book.getfoundry.sh/anvil/) locally. Scripts are available in the `script/` directory, which can be used to deploy hooks, create pools, provide liquidity and swap tokens. The scripts support both local `anvil` environment as well as running them directly on a production network.
+```text
+TypeScript passes
+Vite build succeeds
+Foundry tests pass
+```
 
-### Executing locally with using **Anvil**:
-
-1. Start Anvil (or fork a specific chain using anvil):
+Run the app:
 
 ```bash
-anvil
+npm run dev
 ```
 
-or
+Start the Agentic Wallet bridge:
 
 ```bash
-anvil --fork-url <YOUR_RPC_URL>
+npm run agentic:bridge
 ```
 
-2. Execute scripts:
+Open the local Vite URL. The app does not connect to an injected browser wallet. The bridge listens on `127.0.0.1:8789` and shows the Agentic Wallet address and funds.
+
+Write mode is intentionally off by default. For real contract calls after owner approval:
 
 ```bash
-forge script script/00_DeployHook.s.sol \
-    --rpc-url http://localhost:8545 \
-    --private-key <PRIVATE_KEY> \
-    --broadcast
+AGENTIC_BRIDGE_WRITE=1 npm run agentic:bridge
 ```
 
-### Using **RPC URLs** (actual transactions):
+## X Layer Deployment Runbook
 
-:::info
-It is best to not store your private key even in .env or enter it directly in the command line. Instead use the `--account` flag to select your private key from your keystore.
-:::
-
-### Follow these steps if you have not stored your private key in the keystore:
-
-<details>
-
-1. Add your private key to the keystore:
+Create `.env`:
 
 ```bash
-cast wallet import <SET_A_NAME_FOR_KEY> --interactive
+cp .env.example .env
 ```
 
-2. You will prompted to enter your private key and set a password, fill and press enter:
-
-```
-Enter private key: <YOUR_PRIVATE_KEY>
-Enter keystore password: <SET_NEW_PASSWORD>
-```
-
-You should see this:
-
-```
-`<YOUR_WALLET_PRIVATE_KEY_NAME>` keystore was saved successfully. Address: <YOUR_WALLET_ADDRESS>
-```
-
-::: warning
-Use `history -c` to clear your command history.
-:::
-
-</details>
-
-1. Execute scripts:
+Fill the owner-approved values, then deploy in this order:
 
 ```bash
-forge script script/00_DeployHook.s.sol \
-    --rpc-url <YOUR_RPC_URL> \
-    --account <YOUR_WALLET_PRIVATE_KEY_NAME> \
-    --sender <YOUR_WALLET_ADDRESS> \
-    --broadcast
+source .env
+forge script script/00_DeployDemoTokens.s.sol --rpc-url "$X_LAYER_RPC_URL" --account "$FOUNDRY_ACCOUNT" --sender "$DEPLOYER_ADDRESS" --broadcast
 ```
-
-You will prompted to enter your wallet password, fill and press enter:
-
-```
-Enter keystore password: <YOUR_PASSWORD>
-```
-
-### Key Modifications to note:
-
-1. Update the `token0` and `token1` addresses in the `BaseScript.sol` file to match the tokens you want to use in the network of your choice for sepolia and mainnet deployments.
-2. Update the `token0Amount` and `token1Amount` in the `CreatePoolAndAddLiquidity.s.sol` file to match the amount of tokens you want to provide liquidity with.
-3. Update the `token0Amount` and `token1Amount` in the `AddLiquidity.s.sol` file to match the amount of tokens you want to provide liquidity with.
-4. Update the `amountIn` and `amountOutMin` in the `Swap.s.sol` file to match the amount of tokens you want to swap.
-
-### Verifying the hook contract
 
 ```bash
-forge verify-contract \
-  --rpc-url <URL> \
-  --chain <CHAIN_NAME_OR_ID> \
-  # Generally etherscan
-  --verifier <Verification_Provider> \
-  # Use --etherscan-api-key <ETHERSCAN_API_KEY> if you are using etherscan
-  --verifier-api-key <Verification_Provider_API_KEY> \
-  --constructor-args <ABI_ENCODED_ARGS> \
-  --num-of-optimizations <OPTIMIZER_RUNS> \
-  <Contract_Address> \
-  <path/to/Contract.sol:ContractName>
-  --watch
+SIGNAL_REPORTER="$SIGNAL_REPORTER" \
+forge script script/00_DeployHook.s.sol --rpc-url "$X_LAYER_RPC_URL" --account "$FOUNDRY_ACCOUNT" --sender "$DEPLOYER_ADDRESS" --broadcast
 ```
 
-### Troubleshooting
-
-<details>
-
-#### Permission Denied
-
-When installing dependencies with `forge install`, Github may throw a `Permission Denied` error
-
-Typically caused by missing Github SSH keys, and can be resolved by following the steps [here](https://docs.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh)
-
-Or [adding the keys to your ssh-agent](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent#adding-your-ssh-key-to-the-ssh-agent), if you have already uploaded SSH keys
-
-#### Anvil fork test failures
-
-Some versions of Foundry may limit contract code size to ~25kb, which could prevent local tests to fail. You can resolve this by setting the `code-size-limit` flag
-
-```
-anvil --code-size-limit 40000
+```bash
+HOOK_ADDRESS="$HOOK_ADDRESS" TREASURY_OWNER="$TREASURY_OWNER" AGENT_ADDRESS="$AGENT_ADDRESS" \
+forge script script/03_DeployAgentTreasury.s.sol --rpc-url "$X_LAYER_RPC_URL" --account "$FOUNDRY_ACCOUNT" --sender "$DEPLOYER_ADDRESS" --broadcast
 ```
 
-#### Hook deployment failures
+```bash
+TOKEN0="$TOKEN0" TOKEN1="$TOKEN1" HOOK_ADDRESS="$HOOK_ADDRESS" \
+forge script script/01_CreatePoolAndAddLiquidity.s.sol --rpc-url "$X_LAYER_RPC_URL" --account "$FOUNDRY_ACCOUNT" --sender "$DEPLOYER_ADDRESS" --broadcast
+```
 
-Hook deployment failures are caused by incorrect flags or incorrect salt mining
+Then use the app to:
 
-1. Verify the flags are in agreement:
-   - `getHookCalls()` returns the correct flags
-   - `flags` provided to `HookMiner.find(...)`
-2. Verify salt mining is correct:
-   - In **forge test**: the _deployer_ for: `new Hook{salt: salt}(...)` and `HookMiner.find(deployer, ...)` are the same. This will be `address(this)`. If using `vm.prank`, the deployer will be the pranking address
-   - In **forge script**: the deployer must be the CREATE2 Proxy: `0x4e59b44847b379578588920cA78FbF26c0B4956C`
-     - If anvil does not have the CREATE2 deployer, your foundry may be out of date. You can update it with `foundryup`
+- connect Agentic Wallet through the bridge,
+- copy the Agentic Wallet receive address and fund it with tiny test assets,
+- verify the Agentic Wallet funds panel,
+- choose a usable Agentic Wallet asset from the asset menu,
+- prepare ERC20 approve and Vault deposit actions,
+- run security scan before each prepared action,
+- execute through Agentic Wallet only after owner-approved write mode,
+- authorize one LP strategy,
+- prepare and scan the Hook signal action,
+- prepare and scan the Agent proposal action,
+- fill all transaction hashes into `deployment/xlayer-mainnet.review.json`.
 
-</details>
+## Security Boundaries
 
-### Additional Resources
+- The app never connects to a browser injected wallet.
+- The Agentic Wallet bridge is read/scan-only by default and never signs or broadcasts unless `AGENTIC_BRIDGE_WRITE=1` is explicitly set.
+- The app does not ask for seed phrases or private keys.
+- Use Foundry keystore `--account`; avoid raw private keys in shell history.
+- Real Agentic Wallet `contract-call` runs must follow the safety scan and confirmation flow first.
+- Use tiny demo token amounts for the first proof.
+- Agent authority is pool-scoped and policy-limited.
+- Owner can pause the vault, update the Agent, update the Hook, and withdraw funds.
+- Manual approval is the default app mode. Autopilot is only enabled when the owner explicitly disables manual approval for an authorized opportunity.
 
-- [Uniswap v4 docs](https://docs.uniswap.org/contracts/v4/overview)
-- [v4-periphery](https://github.com/uniswap/v4-periphery)
-- [v4-core](https://github.com/uniswap/v4-core)
-- [v4-by-example](https://v4-by-example.org)
+## Judge Proof Checklist
+
+- Hook contract address on X Layer.
+- Treasury Vault contract address.
+- Agentic Wallet / Agent address used for the demo.
+- Demo token pair addresses.
+- Pool initialize transaction with dynamic fee and Hook address.
+- Treasury funding transactions.
+- Pool authorization transaction.
+- Hook signal transaction.
+- Agent proposal transaction.
+- Liquidity action transaction showing Hook callback enforcement.
+- App screenshot/video showing Agentic Wallet connection, funds display, opportunity selection, prepared/scanned actions, authorization, and proof log.

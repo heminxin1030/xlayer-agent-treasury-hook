@@ -1,0 +1,28 @@
+{
+  "name": "xlayer-agent-treasury-hook",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 app",
+    "build": "vite build app",
+    "preview": "vite preview --host 127.0.0.1",
+    "agentic:bridge": "node scripts/agentic-wallet-bridge.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:contracts": "forge test",
+    "test:all": "npm run typecheck && npm run build && forge test"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.4",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "viem": "^2.50.3",
+    "vite": "^7.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  }
+}

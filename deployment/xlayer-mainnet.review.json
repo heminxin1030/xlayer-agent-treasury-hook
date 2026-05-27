@@ -1,0 +1,47 @@
+{
+  "status": "local-review-not-deployed",
+  "chain": {
+    "name": "X Layer mainnet",
+    "chainId": 196,
+    "rpcUrl": "https://rpc.xlayer.tech",
+    "explorer": "https://www.okx.com/web3/explorer/xlayer",
+    "gasToken": "OKB"
+  },
+  "uniswapV4": {
+    "poolManager": "0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32",
+    "positionManager": "0xcF1EAFC6928dC385A342E7C6491d371d2871458b",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+  },
+  "project": {
+    "name": "AI Agent Treasury Hook",
+    "hookContract": "AgentTreasuryHook",
+    "vaultContract": "AgentTreasuryVault",
+    "hookAddress": null,
+    "treasuryVaultAddress": null,
+    "treasuryOwner": null,
+    "agentAddress": null,
+    "signalReporter": null,
+    "demoRouterAddress": null,
+    "aiUsdToken": null,
+    "gFlowToken": null,
+    "token0": null,
+    "token1": null,
+    "poolId": null,
+    "demoTokenDeployTx": null,
+    "hookDeployTx": null,
+    "vaultDeployTx": null,
+    "poolInitializeTx": null,
+    "initialLiquidityTx": null,
+    "treasuryDepositTxs": [],
+    "poolAuthorizationTx": null,
+    "opportunitySignalTx": null,
+    "agentProposalTx": null,
+    "agentLiquidityActionTx": null
+  },
+  "approvalGate": {
+    "githubPublishApproved": false,
+    "walletSigningApproved": false,
+    "xLayerDeploymentApproved": false,
+    "hackathonSubmissionApproved": false
+  }
+}

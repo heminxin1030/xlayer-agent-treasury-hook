@@ -72,6 +72,8 @@ abstract contract Deployers {
     function deployPoolManager() internal virtual {
         if (block.chainid == 31337) {
             poolManager = IPoolManager(V4PoolManagerDeployer.deploy(address(0x4444)));
+        } else if (block.chainid == 196) {
+            poolManager = IPoolManager(0x360E68faCcca8cA495c1B759Fd9EEe466db9FB32);
         } else {
             poolManager = IPoolManager(AddressConstants.getPoolManagerAddress(block.chainid));
         }
@@ -84,6 +86,8 @@ abstract contract Deployers {
                     address(poolManager), address(permit2), 300_000, address(0), address(0)
                 )
             );
+        } else if (block.chainid == 196) {
+            positionManager = IPositionManager(0xcF1EAFC6928dC385A342E7C6491d371d2871458b);
         } else {
             positionManager = IPositionManager(AddressConstants.getPositionManagerAddress(block.chainid));
         }
@@ -92,6 +96,8 @@ abstract contract Deployers {
     function deployRouter() internal virtual {
         if (block.chainid == 31337) {
             swapRouter = IUniswapV4Router04(payable(V4RouterDeployer.deploy(address(poolManager), address(permit2))));
+        } else if (block.chainid == 196) {
+            swapRouter = IUniswapV4Router04(payable(address(0)));
         } else {
             swapRouter = IUniswapV4Router04(payable(AddressConstants.getV4SwapRouterAddress(block.chainid)));
         }

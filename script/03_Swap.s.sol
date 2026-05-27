@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 
 import {BaseScript} from "./base/BaseScript.sol";
 
@@ -10,11 +11,16 @@ contract SwapScript is BaseScript {
         PoolKey memory poolKey = PoolKey({
             currency0: currency0,
             currency1: currency1,
-            fee: 3000,
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: 60,
             hooks: hookContract // This must match the pool
         });
-        bytes memory hookData = new bytes(0);
+        bytes memory hookData = vm.envOr("HOOK_DATA", bytes(""));
+        uint256 amountIn = vm.envOr("AMOUNT_IN", uint256(1e18));
+        uint256 amountOutMin = vm.envOr("AMOUNT_OUT_MIN", uint256(0));
+        bool zeroForOne = vm.envOr("ZERO_FOR_ONE", true);
+
+        require(address(swapRouter) != address(0), "SWAP_ROUTER required outside local tests");
 
         vm.startBroadcast();
 
@@ -24,9 +30,9 @@ contract SwapScript is BaseScript {
 
         // Execute swap
         swapRouter.swapExactTokensForTokens({
-            amountIn: 1e18,
-            amountOutMin: 0, // Very bad, but we want to allow for unlimited price impact
-            zeroForOne: true,
+            amountIn: amountIn,
+            amountOutMin: amountOutMin,
+            zeroForOne: zeroForOne,
             poolKey: poolKey,
             hookData: hookData,
             receiver: address(this),
