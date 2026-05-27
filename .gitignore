@@ -13,6 +13,8 @@ docs/generated/
 
 # Dotenv file
 .env
+deployment/*.local.json
+deployment/*.local.*
 
 # Node modules
 node_modules/

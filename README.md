@@ -2,7 +2,14 @@
 
 AI Agent Treasury Hook is an X Layer + Uniswap v4 project where a user funds an OKX Agentic Wallet, the Agentic Wallet manages treasury assets, and a Hook enforces the user's risk limits whenever liquidity is added, removed, or rebalanced.
 
-This version is ready for GitHub testing. X Layer deployment, demo video recording, and hackathon submission still require owner approval before final submission.
+This version includes live X Layer mainnet proof. Demo video recording, final X post, and the hackathon submission form still require owner approval before final submission.
+
+Fast proof links:
+
+- Judge guide: [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md)
+- Deployment manifest: [`deployment/xlayer-mainnet.review.json`](deployment/xlayer-mainnet.review.json)
+- Local Agentic Wallet proof: `npm run proof:agentic`
+- Live chain proof: `npm run verify:live`
 
 ## Why This Hook Exists
 
@@ -105,6 +112,23 @@ xlayer-agentic-intent-hook/
 - PositionManager: `0xcF1EAFC6928dC385A342E7C6491d371d2871458b`
 - Permit2: `0x000000000022D473030F116dDEE9F6B43aC78BA3`
 
+## Live X Layer Proof
+
+Deployed on X Layer mainnet, chain `196`. Full proof data is in [`deployment/xlayer-mainnet.review.json`](deployment/xlayer-mainnet.review.json).
+
+| Artifact | Address / tx |
+| --- | --- |
+| `AgentTreasuryHook` | [`0x0399aa2C8e39aAC071A5ce36ef4a6502492A1aC0`](https://www.okx.com/web3/explorer/xlayer/address/0x0399aa2C8e39aAC071A5ce36ef4a6502492A1aC0) |
+| `AgentTreasuryVault` | [`0x4CE73a41011B8C24A970BD6728C30090CF82f5a5`](https://www.okx.com/web3/explorer/xlayer/address/0x4CE73a41011B8C24A970BD6728C30090CF82f5a5) |
+| Token0 `gFLOW` | [`0x776bFCc40Fb3d226008e9E673F80bbbaD60a6B82`](https://www.okx.com/web3/explorer/xlayer/address/0x776bFCc40Fb3d226008e9E673F80bbbaD60a6B82) |
+| Token1 `aiUSD` | [`0xd96cd09862171cC0A24F34915445069993354753`](https://www.okx.com/web3/explorer/xlayer/address/0xd96cd09862171cC0A24F34915445069993354753) |
+| PoolId | `0x71c6d1a391493f9e73a64e8256cc39b134e57b2042178272f1b59e02c01dea50` |
+| Pool initialize + initial liquidity | [`0xda1c6d68456f4693d7377d6f96bcf2a7de50e6e71b4aaa32c61a5cf57cdfb500`](https://www.okx.com/web3/explorer/xlayer/tx/0xda1c6d68456f4693d7377d6f96bcf2a7de50e6e71b4aaa32c61a5cf57cdfb500) |
+| Agentic Wallet pool authorization | [`0xd03e1816d33fc8da51c788b8131841cc84a24a00363ab2d10d5e8cccd1c4fea4`](https://www.okx.com/web3/explorer/xlayer/tx/0xd03e1816d33fc8da51c788b8131841cc84a24a00363ab2d10d5e8cccd1c4fea4) |
+| Agentic Wallet Hook signal | [`0x778127126524bef07aad0c8da5ee62c97264561bc5bc55c63783e9879c6f3754`](https://www.okx.com/web3/explorer/xlayer/tx/0x778127126524bef07aad0c8da5ee62c97264561bc5bc55c63783e9879c6f3754) |
+| Agentic Wallet proposal | [`0x040fa1f4516568e6cb06fa4c8e28c10d3efa04666b1e81633a6f332874025378`](https://www.okx.com/web3/explorer/xlayer/tx/0x040fa1f4516568e6cb06fa4c8e28c10d3efa04666b1e81633a6f332874025378) |
+| Hook-validated LP action | [`0x357651309319b38b2c7c454bd6db776f1b71637908f3cc0b407ead5c22f8a011`](https://www.okx.com/web3/explorer/xlayer/tx/0x357651309319b38b2c7c454bd6db776f1b71637908f3cc0b407ead5c22f8a011) |
+
 ## Local Verification
 
 ```bash
@@ -136,6 +160,15 @@ npm run agentic:bridge
 
 Open the local Vite URL. The app does not connect to an injected browser wallet. The gateway listens on `127.0.0.1:8789`, lets a user log in with Agentic Wallet email OTP, and shows that user's X Layer funds.
 
+For a local judge/demo machine that is already logged in through OnchainOS, run:
+
+```bash
+npm run agentic:bridge:local
+npm run proof:agentic
+```
+
+That writes `deployment/agentic-wallet.proof.local.json`, which is intentionally gitignored because it contains the demo wallet address and live balances. Use screenshots/video from this local proof after owner review.
+
 Write mode is intentionally off by default. For real contract calls after owner approval:
 
 ```bash
@@ -143,6 +176,14 @@ AGENTIC_BRIDGE_WRITE=1 npm run agentic:bridge
 ```
 
 For public testing, deploy the same gateway behind HTTPS and configure the frontend with that endpoint. The normal user flow is only email -> OTP -> connected wallet; the gateway URL is a deployment detail. Each user receives an isolated session id, so the server does not share one Agentic Wallet across users.
+
+Verify live proof after deployment:
+
+```bash
+npm run verify:live
+```
+
+This command fails until `deployment/xlayer-mainnet.review.json` contains the Hook, Vault, Pool, and proof transaction hashes. That is intentional; it prevents an undeployed demo from being presented as a finished submission.
 
 ## X Layer Deployment Runbook
 
@@ -186,7 +227,7 @@ Then use the app to:
 - authorize one LP strategy,
 - prepare and scan the Hook signal action,
 - prepare and scan the Agent proposal action,
-- fill all transaction hashes into `deployment/xlayer-mainnet.review.json`.
+- confirm the live transaction hashes in `deployment/xlayer-mainnet.review.json`.
 
 ## Security Boundaries
 

@@ -1,5 +1,5 @@
 {
-  "status": "local-review-not-deployed",
+  "status": "xlayer-mainnet-proof-live",
   "chain": {
     "name": "X Layer mainnet",
     "chainId": 196,
@@ -16,32 +16,54 @@
     "name": "AI Agent Treasury Hook",
     "hookContract": "AgentTreasuryHook",
     "vaultContract": "AgentTreasuryVault",
-    "hookAddress": null,
-    "treasuryVaultAddress": null,
-    "treasuryOwner": null,
-    "agentAddress": null,
-    "signalReporter": null,
+    "hookAddress": "0x0399aa2C8e39aAC071A5ce36ef4a6502492A1aC0",
+    "treasuryVaultAddress": "0x4CE73a41011B8C24A970BD6728C30090CF82f5a5",
+    "treasuryOwner": "0xB806498D8bB4172E30F3921fa930573ba5BF9FB8",
+    "agentAddress": "0xB806498D8bB4172E30F3921fa930573ba5BF9FB8",
+    "signalReporter": "0xB806498D8bB4172E30F3921fa930573ba5BF9FB8",
     "demoRouterAddress": null,
-    "aiUsdToken": null,
-    "gFlowToken": null,
-    "token0": null,
-    "token1": null,
-    "poolId": null,
-    "demoTokenDeployTx": null,
-    "hookDeployTx": null,
-    "vaultDeployTx": null,
-    "poolInitializeTx": null,
-    "initialLiquidityTx": null,
+    "aiUsdToken": "0xd96cd09862171cC0A24F34915445069993354753",
+    "gFlowToken": "0x776bFCc40Fb3d226008e9E673F80bbbaD60a6B82",
+    "token0": "0x776bFCc40Fb3d226008e9E673F80bbbaD60a6B82",
+    "token1": "0xd96cd09862171cC0A24F34915445069993354753",
+    "poolId": "0x71c6d1a391493f9e73a64e8256cc39b134e57b2042178272f1b59e02c01dea50",
+    "demoTokenDeployTx": "0x474f220b3a799f908dd7e68ca239c01aa3ace48608e79ca48b993f13d786f4a5",
+    "hookDeployTx": "0x0a9557596145b8bfcf2f1e94244475537c187ec3ffb914c453c925c9314f4a6c",
+    "vaultDeployTx": "0x0b5058260fb9f55346ca2fd788eca925862b4c858b64c5a6247a87867d212574",
+    "poolInitializeTx": "0xda1c6d68456f4693d7377d6f96bcf2a7de50e6e71b4aaa32c61a5cf57cdfb500",
+    "initialLiquidityTx": "0xda1c6d68456f4693d7377d6f96bcf2a7de50e6e71b4aaa32c61a5cf57cdfb500",
     "treasuryDepositTxs": [],
-    "poolAuthorizationTx": null,
-    "opportunitySignalTx": null,
-    "agentProposalTx": null,
-    "agentLiquidityActionTx": null
+    "poolAuthorizationTx": "0xd03e1816d33fc8da51c788b8131841cc84a24a00363ab2d10d5e8cccd1c4fea4",
+    "opportunitySignalTx": "0x778127126524bef07aad0c8da5ee62c97264561bc5bc55c63783e9879c6f3754",
+    "agentProposalTx": "0x040fa1f4516568e6cb06fa4c8e28c10d3efa04666b1e81633a6f332874025378",
+    "agentLiquidityActionTx": "0x357651309319b38b2c7c454bd6db776f1b71637908f3cc0b407ead5c22f8a011",
+    "actionId": "0x57f1b8b4ef7380c57a96c33845f92f58e6f59d398d48b4a5956243c868a06dd0",
+    "deployerAddress": "0x4A11DfF24ea3d31bBEa89d1Eb190A459848382a4",
+    "agenticWalletProof": "local proof generated; screenshot/video required before final submission",
+    "deployerFundingTx": "0xf17f6b5a29d54485e962ad813cc2e35165d8f4a848e26eaeb6254514612bae63",
+    "demoTokenDeployTxs": [
+      "0x474f220b3a799f908dd7e68ca239c01aa3ace48608e79ca48b993f13d786f4a5",
+      "0xbe6983357c334e9a10b77e976d564a46bb37097615bb3faade86a64f96a56f4b"
+    ],
+    "proofLedger": {
+      "agenticWalletFundingTx": "0xf17f6b5a29d54485e962ad813cc2e35165d8f4a848e26eaeb6254514612bae63",
+      "tokenDeployTxs": [
+        "0x474f220b3a799f908dd7e68ca239c01aa3ace48608e79ca48b993f13d786f4a5",
+        "0xbe6983357c334e9a10b77e976d564a46bb37097615bb3faade86a64f96a56f4b"
+      ],
+      "hookDeployTx": "0x0a9557596145b8bfcf2f1e94244475537c187ec3ffb914c453c925c9314f4a6c",
+      "vaultDeployTx": "0x0b5058260fb9f55346ca2fd788eca925862b4c858b64c5a6247a87867d212574",
+      "poolInitializeAndInitialLiquidityTx": "0xda1c6d68456f4693d7377d6f96bcf2a7de50e6e71b4aaa32c61a5cf57cdfb500",
+      "agenticPoolAuthorizationTx": "0xd03e1816d33fc8da51c788b8131841cc84a24a00363ab2d10d5e8cccd1c4fea4",
+      "agenticHookSignalTx": "0x778127126524bef07aad0c8da5ee62c97264561bc5bc55c63783e9879c6f3754",
+      "agenticProposalTx": "0x040fa1f4516568e6cb06fa4c8e28c10d3efa04666b1e81633a6f332874025378",
+      "hookValidatedLiquidityTx": "0x357651309319b38b2c7c454bd6db776f1b71637908f3cc0b407ead5c22f8a011"
+    }
   },
   "approvalGate": {
-    "githubPublishApproved": false,
-    "walletSigningApproved": false,
-    "xLayerDeploymentApproved": false,
+    "githubPublishApproved": true,
+    "walletSigningApproved": true,
+    "xLayerDeploymentApproved": true,
     "hackathonSubmissionApproved": false
   }
 }

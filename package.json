@@ -8,6 +8,9 @@
     "build": "vite build app",
     "preview": "vite preview --host 127.0.0.1",
     "agentic:bridge": "node scripts/agentic-wallet-bridge.mjs",
+    "agentic:bridge:local": "AGENTIC_GATEWAY_ALLOW_DEFAULT_HOME=1 node scripts/agentic-wallet-bridge.mjs",
+    "proof:agentic": "node scripts/collect-agentic-proof.mjs",
+    "verify:live": "node scripts/verify-live.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:contracts": "forge test",
     "test:all": "npm run typecheck && npm run build && forge test"
