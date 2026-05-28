@@ -188,7 +188,7 @@ const COPY = {
     },
     proof: {
       title: "Live X Layer Proof",
-      subtitle: "评委即使不运行本地 Agent，也能直接验证这些主网交易和 Hook/Vault 状态。",
+      subtitle: "",
       hook: "Hook",
       vault: "Vault",
       agent: "Agentic Wallet",
@@ -253,7 +253,7 @@ const COPY = {
     },
     advanced: {
       title: "高级信息",
-      subtitle: "给评委、开发者和部署时使用。普通用户不需要先看这里。",
+      subtitle: "",
       vault: "Vault 地址",
       hook: "Hook 地址",
       agent: "Agent 地址",
@@ -341,7 +341,7 @@ const COPY = {
     },
     proof: {
       title: "Live X Layer Proof",
-      subtitle: "Judges can verify these mainnet transactions and Hook/Vault state even without running the local Agent.",
+      subtitle: "",
       hook: "Hook",
       vault: "Vault",
       agent: "Agentic Wallet",
@@ -406,7 +406,7 @@ const COPY = {
     },
     advanced: {
       title: "Advanced",
-      subtitle: "For judges, developers, and deployment. Normal users do not need to start here.",
+      subtitle: "",
       vault: "Vault address",
       hook: "Hook address",
       agent: "Agent address",
@@ -1066,7 +1066,7 @@ export function App() {
       <section className="content">
         <header className="topbar">
           <div>
-            <p className="eyebrow">OKX Agentic Wallet / X Layer AgentFi</p>
+            <p className="eyebrow">Agentic Wallet / X Layer AgentFi</p>
             <h1>{c.heroTitle}</h1>
             <p className="hero-copy">{c.heroCopy}</p>
           </div>
